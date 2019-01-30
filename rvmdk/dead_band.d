@@ -1,0 +1,11 @@
+.\rvmdk\dead_band.o: ..\..\..\peripherals\pwm\dead_band.c
+.\rvmdk\dead_band.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
+.\rvmdk\dead_band.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
+.\rvmdk\dead_band.o: ..\..\..\..\inc/hw_memmap.h
+.\rvmdk\dead_band.o: ..\..\..\..\driverlib/gpio.h
+.\rvmdk\dead_band.o: ..\..\..\..\driverlib/pin_map.h
+.\rvmdk\dead_band.o: ..\..\..\..\driverlib/pwm.h
+.\rvmdk\dead_band.o: ..\..\..\..\driverlib/sysctl.h
+.\rvmdk\dead_band.o: ..\..\..\..\driverlib/uart.h
+.\rvmdk\dead_band.o: ..\..\..\..\utils/uartstdio.h
+.\rvmdk\dead_band.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdarg.h
