@@ -115,7 +115,7 @@ __Vectors
         DCD     IntDefaultHandler           ; ADC Sequence 2
         DCD     IntDefaultHandler           ; ADC Sequence 3
         DCD     IntDefaultHandler           ; Watchdog timer
-        DCD     IntDefaultHandler           ; Timer 0 subtimer A
+        DCD     Timer0IntHandler           ; Timer 0 subtimer A
         DCD     IntDefaultHandler           ; Timer 0 subtimer B
         DCD     IntDefaultHandler           ; Timer 1 subtimer A
         DCD     IntDefaultHandler           ; Timer 1 subtimer B
@@ -299,6 +299,9 @@ FaultISR
 IntDefaultHandler
         B       IntDefaultHandler
 
+
+
+
 ;******************************************************************************
 ;
 ; Make sure the end of this section is aligned.
@@ -325,6 +328,7 @@ IntDefaultHandler
         EXPORT  __initial_sp
         EXPORT  __heap_base
         EXPORT  __heap_limit
+		EXPORT Timer0IntHandler
     ELSE
         IMPORT  __use_two_region_memory
         EXPORT  __user_initial_stackheap

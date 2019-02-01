@@ -1,7 +1,7 @@
 --cpu=Cortex-M4.fp
 ".\rvmdk\blinky.o"
 ".\rvmdk\startup_rvmdk.o"
-"..\..\..\..\driverlib\rvmdk\driverlib.lib"
+"C:\ti\TivaWare_C_Series-2.1.4.178\driverlib\rvmdk\driverlib.lib"
 --library_type=microlib --strict --scatter "blinky.sct"
 --entry Reset_Handler --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

@@ -21,17 +21,16 @@ Target DLL:      lmidk-agdi.dll V???
 Dialog DLL:      TCM.DLL V1.32.0.0
  
 <h2>Project:</h2>
-C:\ti\TivaWare_C_Series-2.1.4.178\examples\boards\ek-tm4c123gxl\lab_2\blinky.uvprojx
-Project File Date:  01/24/2019
+C:\Users\A01773387\Documents\e-bike\blinky.uvprojx
+Project File Date:  01/31/2019
 
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 5 (build 528)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
 Build target 'blinky'
-compiling blinky.c...
-linking...
-Program Size: Code=1796 RO-data=16 RW-data=0 ZI-data=512  
-After Build - User command #1: fromelf --bin --output .\rvmdk\blinky.bin .\rvmdk\blinky.axf
-".\rvmdk\blinky.axf" - 0 Error(s), 0 Warning(s).
+assembling startup_rvmdk.S...
+startup_rvmdk.S(118): error: A1516E: Bad symbol 'Timer0IntHandler', not defined or external
+startup_rvmdk.S(331): error: A1145E: Undefined exported symbol 'Timer0IntHandler'
+".\rvmdk\blinky.axf" - 2 Error(s), 0 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -54,6 +53,7 @@ Package Vendor: Keil
 <h2>Collection of Component Files used:</h2>
 
    * Component: ARM::CMSIS:CORE:5.0.1
+Target not created.
 Build Time Elapsed:  00:00:00
 </pre>
 </body>
