@@ -129,7 +129,7 @@ void pins(){
 
         // Define Outputs
         GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_6); // A up - 1
-        GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_7); // A lo - 2
+        GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_4); // A lo - 2
         GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_6); // B up - 3
         GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_7); // B lo - 4
         GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_4); // C up - 5
@@ -148,7 +148,7 @@ void pins(){
             switch (abc) {
                 case 5: {
                     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_PIN_6);
-                    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, GPIO_PIN_7);
+                    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_PIN_4);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, 0x0);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, 0x0);
@@ -157,16 +157,16 @@ void pins(){
                 }
                 case 4: {
                     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, 0x0);
-                    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, GPIO_PIN_7);
+                    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_PIN_4);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
-                    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, GPIO_PIN_7);
-                    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, 0x0);
+                    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, 0x0);
+                    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, GPIO_PIN_4);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_5, GPIO_PIN_5);
                     break;
                 }
                 case 6: {
                     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, 0x0);
-                    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, GPIO_PIN_7);
+                    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_PIN_4);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, GPIO_PIN_7);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, GPIO_PIN_4);
@@ -175,7 +175,7 @@ void pins(){
                 }
                 case 2: {
                     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_PIN_6);
-                    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, GPIO_PIN_7);
+                    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_PIN_4);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, 0x0);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, GPIO_PIN_7);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, GPIO_PIN_4);
@@ -185,7 +185,7 @@ void pins(){
                 }
                 case 3: {
                     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_PIN_6);
-                    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, 0x0);
+                    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, 0x0);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, 0x0);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, GPIO_PIN_7);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, GPIO_PIN_4);
@@ -194,7 +194,7 @@ void pins(){
                 }
                 case 1: {
                     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_PIN_6);
-                    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, 0x0);
+                    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, 0x0);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, GPIO_PIN_7);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, 0x0);
@@ -203,7 +203,7 @@ void pins(){
                 }
                 default: {
                     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_PIN_6);
-                    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, GPIO_PIN_7);
+                    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_PIN_4);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, GPIO_PIN_7);
                     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, GPIO_PIN_4);
@@ -225,12 +225,9 @@ void Timer0IntHandler(void) {
 TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
 // Read the current state of the GPIO pin and
 // write back the opposite state
-if(GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_2))
-{
-GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, 0);
-}
-else
-{
-GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
+if(GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_2)){
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, 0);
+} else {
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
 }
 }
