@@ -84,29 +84,97 @@ __error__(char *pcFilename, uint32_t ui32Line)
 //
 //*****************************************************************************
 
+uint32_t ui32ADC0Value[3];
+volatile uint32_t intStatus;
+const uint32_t vMax = 4000;
+const uint32_t vMin = 600;
+
+void ADC0IntHandler(void){
+    ADCIntClear(ADC0_BASE, 0);
+
+    ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
+
+
+
+
+    if(ui32ADC0Value[0] > vMax || ui32ADC0Value[0] < vMin ||
+            ui32ADC0Value[1] > vMax || ui32ADC0Value[1] < vMin ||
+            ui32ADC0Value[2] > vMax || ui32ADC0Value[2] < vMin) {
+        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
+        intStatus = 0;
+    } else {
+        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, 0);
+        intStatus = 1;
+    }
+}
+
+void Timer0IntHandler(void) {
+// Clear the timer interrupt
+TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+// Read the current state of the GPIO pin and
+// write back the opposite state
+
+}
+
+
+void initTimer(){
+uint32_t ui32Period;
+SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_XTAL_16MHZ|SYSCTL_OSC_MAIN);
+
+SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
+SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+
+while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF)) { }
+
+GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
+
+// Check if the peripheral access is enabled.
+
+
+//GPIOPinTypeGPIOInput(GPIO_PORTE_BASE, GPIO_PIN_1); // Current Sensor A // CH2
+//GPIOPinTypeGPIOInput(GPIO_PORTE_BASE, GPIO_PIN_2); // Current Sensor B // CH1
+//GPIOPinTypeGPIOInput(GPIO_PORTE_BASE, GPIO_PIN_3); // Current Sensor C // CH0
+//GPIOPadConfigSet(GPIO_PORTE_BASE, GPIO_PIN_1,GPIO_STRENGTH_8MA, GPIO_PIN_TYPE_ANALOG);
+//GPIOPadConfigSet(GPIO_PORTE_BASE, GPIO_PIN_2,GPIO_STRENGTH_8MA, GPIO_PIN_TYPE_ANALOG);
+//GPIOPadConfigSet(GPIO_PORTE_BASE, GPIO_PIN_3,GPIO_STRENGTH_8MA, GPIO_PIN_TYPE_ANALOG);
+
+// Configure ADC
+ADCHardwareOversampleConfigure(ADC0_BASE,4);
+ADCReferenceSet(ADC0_BASE, ADC_REF_INT);
+
+ADCSequenceConfigure(ADC0_BASE, 0, ADC_TRIGGER_TIMER, 0);
+ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH0);
+ADCSequenceStepConfigure(ADC0_BASE, 0, 1, ADC_CTL_CH1);
+ADCSequenceStepConfigure(ADC0_BASE, 0 ,2, ADC_CTL_CH2|ADC_CTL_IE|ADC_CTL_END);
+ADCSequenceEnable(ADC0_BASE, 0);
+
+GPIOPinTypeADC(GPIO_PORTE_BASE,GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
+
+TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
+ui32Period = (SysCtlClockGet() / 10) / 2;
+TimerLoadSet(TIMER0_BASE, TIMER_A, ui32Period -1);
+TimerControlTrigger(TIMER0_BASE, TIMER_A, true);
+
+ADCIntRegister(ADC0_BASE, 0, ADC0IntHandler);
+TimerIntRegister(TIMER0_BASE, TIMER_A, Timer0IntHandler);
+
+IntEnable(INT_TIMER0A);
+TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+IntEnable(INT_ADC0SS0);
+ADCIntEnable(ADC0_BASE, 0);
+
+IntMasterEnable();
+TimerEnable(TIMER0_BASE, TIMER_A);
+}
+
 int setAbc(bool a, bool b, bool c) {
     int abc = 0;
         if(a) abc = abc + 4;
         if(b) abc = abc + 2;
         if(c) abc = abc + 1;
         return abc;
-}
-
-void initTimer(){
-uint32_t ui32Period;
-SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_XTAL_16MHZ|SYSCTL_OSC_MAIN);
-
-SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
-GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
-SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
-
-TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
-ui32Period = (SysCtlClockGet() / 10) / 2;
-TimerLoadSet(TIMER0_BASE, TIMER_A, ui32Period -1);
-IntEnable(INT_TIMER0A);
-TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-IntMasterEnable();
-TimerEnable(TIMER0_BASE, TIMER_A);
 }
 
 void pins(){
@@ -134,11 +202,6 @@ void pins(){
         GPIOPinTypeGPIOInput(GPIO_PORTA_BASE, GPIO_PIN_4); // Hall A
         GPIOPinTypeGPIOInput(GPIO_PORTA_BASE, GPIO_PIN_3); // Hall B
         GPIOPinTypeGPIOInput(GPIO_PORTA_BASE, GPIO_PIN_2); // Hall C
-
-        GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, GPIO_PIN_1); // Current Sensor A
-        GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, GPIO_PIN_2); // Current Sensor B
-        GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, GPIO_PIN_3); // Current Sensor C
-
 
         // Define Outputs
         GPIOPinTypeGPIOOutput(GPIO_PORTE_BASE, GPIO_PIN_4); // A up - 1
@@ -242,16 +305,4 @@ void pins(){
 int main(void){
         initTimer();
         pins();
-}
-
-void Timer0IntHandler(void) {
-// Clear the timer interrupt
-TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-// Read the current state of the GPIO pin and
-// write back the opposite state
-if(GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_2)){
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, 0);
-} else {
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
-}
 }
