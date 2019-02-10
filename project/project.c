@@ -1,23 +1,32 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include "driverlib/adc.h"
+#include "driverlib/debug.h"
 #include "driverlib/gpio.h"
 #include "driverlib/interrupt.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/pwm.h"
+#include "driverlib/rom.h"
 #include "driverlib/sysctl.h"
 #include "driverlib/timer.h"
+
+#include "inc/hw_gpio.h"
 #include "inc/hw_memmap.h"
 #include "inc/hw_types.h"
 #include "inc/tm4c123gh6pm.h"
 
-#include "driverlib/adc.h"
-#include "driverlib/debug.h"
+#define PWM_FREQUENCY 50000
 
 #ifdef DEBUG
 void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
 
-uint32_t ui32ADC0Value[3];
+uint32_t ui32ADC0Value[4];
 const uint32_t vMax = 4000;
 const uint32_t vMin = 600;
+volatile uint32_t ui32Load;
+volatile uint32_t ui32PWMClock;
+volatile uint32_t ui8Adjust;
 
 void ADC0IntHandler(void) {
   ADCIntClear(ADC0_BASE, 0);
@@ -31,15 +40,19 @@ void ADC0IntHandler(void) {
   } else {
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   }
+
+  //  ui8Adjust = ui32ADC0Value[3] % 10000;
+  //  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui32Load/2);
 }
 
 void Timer0IntHandler(void) { TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT); }
 
 void initTimer() {
   uint32_t ui32Period;
-
+  ui8Adjust = 83;
   SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
                  SYSCTL_OSC_MAIN);
+  ROM_SysCtlPWMClockSet(SYSCTL_PWMDIV_2);
 
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
@@ -47,6 +60,7 @@ void initTimer() {
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
+  SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
 
   // Define Inputs
@@ -60,8 +74,19 @@ void initTimer() {
   GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_7);  // B lo - 4
   GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_4);  // C up - 5
   GPIOPinTypeGPIOOutput(GPIO_PORTA_BASE, GPIO_PIN_5);  // C lo - 6
-  GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
+  GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE,
+                        GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);  // LEDS
 
+  // Configure PWM
+  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+  ROM_GPIOPinConfigure(GPIO_PD0_M1PWM0);
+  ui32PWMClock = SysCtlClockGet() / 2;
+  ui32Load = (ui32PWMClock / PWM_FREQUENCY) - 1;
+  PWMGenConfigure(PWM1_BASE, PWM_GEN_0, PWM_GEN_MODE_DOWN);
+  PWMGenPeriodSet(PWM1_BASE, PWM_GEN_0, ui32Load);
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui8Adjust * ui32Load / 1000);
+  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_0_BIT, true);
+  ROM_PWMGenEnable(PWM1_BASE, PWM_GEN_0);
   // Configure ADC
   ADCHardwareOversampleConfigure(ADC0_BASE, 4);
   ADCReferenceSet(ADC0_BASE, ADC_REF_INT);
@@ -69,14 +94,16 @@ void initTimer() {
   ADCSequenceConfigure(ADC0_BASE, 0, ADC_TRIGGER_TIMER, 0);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH0);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 1, ADC_CTL_CH1);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 2,
-                           ADC_CTL_CH2 | ADC_CTL_IE | ADC_CTL_END);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 2, ADC_CTL_CH2);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 3,
+                           ADC_CTL_CH4 | ADC_CTL_IE | ADC_CTL_END);
   ADCSequenceEnable(ADC0_BASE, 0);
 
   GPIOPinTypeADC(
       GPIO_PORTE_BASE,
       GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);  // 1: Current Sensor A 2:  Current
                                               // Sensor B 3:  Current Sensor C
+  GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_3);  // Throttle
 
   TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
   ui32Period = (SysCtlClockGet() / 10) / 2;
