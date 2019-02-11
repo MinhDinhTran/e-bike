@@ -1,6 +1,10 @@
 {
     "files.associations": {
         "pwm.h": "c",
-        "pin_map.h": "c"
+        "pin_map.h": "c",
+        "project.h": "c",
+        "gpio.h": "c",
+        "rom.h": "c",
+        "hw_gpio.h": "c"
     }
 }
