@@ -41,15 +41,23 @@ void ADC0IntHandler(void) {
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   }
 
-  //  ui8Adjust = ui32ADC0Value[3] % 10000;
-  //  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui32Load/2);
+
+
+  ui8Adjust = ui32ADC0Value[3] % 4096;
+  if(ui8Adjust < 1100){
+    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, 3 * ui32Load/1000);
+  } else if(ui8Adjust > 4000){
+    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui32Load);
+  } else {
+    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, (ui8Adjust-1100) * ui32Load/2996);
+  }
 }
 
 void Timer0IntHandler(void) { TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT); }
 
 void initTimer() {
   uint32_t ui32Period;
-  ui8Adjust = 83;
+  ui8Adjust = 500;
   SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
                  SYSCTL_OSC_MAIN);
   ROM_SysCtlPWMClockSet(SYSCTL_PWMDIV_2);
