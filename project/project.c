@@ -36,6 +36,7 @@ volatile bool c;
 
 volatile bool switch1 = true;
 volatile bool switch2 = true;
+volatile bool isWithinCurrentBound = true;
 
 int setAbc(bool a, bool b, bool c) {
   int abc = 0;
@@ -55,7 +56,7 @@ void writeToGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL) {
 }
 
 void pins() {
-  if (switch1) {
+  if (switch1 && isWithinCurrentBound) {
     a = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_4) & GPIO_PIN_4;
     b = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3) & GPIO_PIN_3;
     c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
@@ -204,7 +205,9 @@ void ADC0IntHandler(void) {
       ui32ADC0Value[1] > vMax || ui32ADC0Value[1] < vMin ||
       ui32ADC0Value[2] > vMax || ui32ADC0Value[2] < vMin) {
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
+    isWithinCurrentBound = false;
   } else {
+    isWithinCurrentBound = true;
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   }
 
