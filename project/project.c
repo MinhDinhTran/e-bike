@@ -15,6 +15,8 @@
 #include "inc/hw_types.h"
 #include "inc/tm4c123gh6pm.h"
 
+#include "project.h"
+
 #define PWM_FREQUENCY 50000
 
 #ifdef DEBUG
@@ -28,32 +30,69 @@ volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
 volatile uint32_t ui8Adjust;
 
-void ADC0IntHandler(void) {
-  ADCIntClear(ADC0_BASE, 0);
-
-  ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
-
-  if (ui32ADC0Value[0] > vMax || ui32ADC0Value[0] < vMin ||
-      ui32ADC0Value[1] > vMax || ui32ADC0Value[1] < vMin ||
-      ui32ADC0Value[2] > vMax || ui32ADC0Value[2] < vMin) {
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
-  } else {
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
-  }
-
-
-
-  ui8Adjust = ui32ADC0Value[3] % 4096;
-  if(ui8Adjust < 1100){
-    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, 3 * ui32Load/1000);
-  } else if(ui8Adjust > 4000){
-    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui32Load);
-  } else {
-    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, (ui8Adjust-1100) * ui32Load/2996);
-  }
+int setAbc(bool a, bool b, bool c) {
+  int abc = 0;
+  if (a) abc = abc + 4;
+  if (b) abc = abc + 2;
+  if (c) abc = abc + 1;
+  return abc;
 }
 
-void Timer0IntHandler(void) { TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT); }
+void writeToGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL) {
+  GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_4, (AH) ? GPIO_PIN_4 : 0x0);
+  GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, (AL) ? GPIO_PIN_4 : 0x0);
+  GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_0, (BH) ? GPIO_PIN_0 : 0x0);
+  GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, (BL) ? GPIO_PIN_7 : 0x0);
+  GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, (CH) ? GPIO_PIN_4 : 0x0);
+  GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_5, (CL) ? GPIO_PIN_5 : 0x0);
+}
+
+void pins() {
+  volatile uint32_t abc;
+  volatile bool a;
+  volatile bool b;
+  volatile bool c;
+
+  // Loop forever.
+  // while (1) {
+  a = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_4) & GPIO_PIN_4;
+  b = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3) & GPIO_PIN_3;
+  c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
+
+  abc = setAbc(a, b, c);
+
+  switch (abc) {
+    case 6: {
+      writeToGates(true, true, true, false, false, true);
+      break;
+    }
+    case 4: {
+      writeToGates(false, true, true, false, true, true);
+      break;
+    }
+    case 5: {
+      writeToGates(false, true, true, true, true, false);
+      break;
+    }
+    case 1: {
+      writeToGates(true, true, false, true, true, false);
+      break;
+    }
+    case 3: {
+      writeToGates(true, false, false, true, true, true);
+      break;
+    }
+    case 2: {
+      writeToGates(true, false, true, true, false, true);
+      break;
+    }
+    default: {
+      writeToGates(true, true, true, true, true, true);
+      break;
+    }
+  }
+  // }
+}
 
 void initTimer() {
   uint32_t ui32Period;
@@ -120,6 +159,13 @@ void initTimer() {
 
   ADCIntRegister(ADC0_BASE, 0, ADC0IntHandler);
   TimerIntRegister(TIMER0_BASE, TIMER_A, Timer0IntHandler);
+  GPIOIntRegister(GPIO_PORTA_BASE, GPIOIntHandler);
+
+  GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_4 | GPIO_PIN_3 | GPIO_PIN_2,
+                 GPIO_BOTH_EDGES);
+
+  GPIOIntEnable(GPIO_PORTA_BASE,
+                GPIO_INT_PIN_4 | GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
 
   IntEnable(INT_TIMER0A);
   TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
@@ -130,71 +176,41 @@ void initTimer() {
   TimerEnable(TIMER0_BASE, TIMER_A);
 }
 
-int setAbc(bool a, bool b, bool c) {
-  int abc = 0;
-  if (a) abc = abc + 4;
-  if (b) abc = abc + 2;
-  if (c) abc = abc + 1;
-  return abc;
-}
-
-void writeToGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL) {
-  GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_4, (AH) ? GPIO_PIN_4 : 0x0);
-  GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, (AL) ? GPIO_PIN_4 : 0x0);
-  GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_0, (BH) ? GPIO_PIN_0 : 0x0);
-  GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, (BL) ? GPIO_PIN_7 : 0x0);
-  GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, (CH) ? GPIO_PIN_4 : 0x0);
-  GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_5, (CL) ? GPIO_PIN_5 : 0x0);
-}
-
-void pins() {
-  volatile uint32_t abc;
-  volatile bool a;
-  volatile bool b;
-  volatile bool c;
-
-  // Loop forever.
-  while (1) {
-    a = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_4) & GPIO_PIN_4;
-    b = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3) & GPIO_PIN_3;
-    c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
-
-    abc = setAbc(a, b, c);
-
-    switch (abc) {
-      case 6: {
-        writeToGates(true, true, true, false, false, true);
-        break;
-      }
-      case 4: {
-        writeToGates(false, true, true, false, true, true);
-        break;
-      }
-      case 5: {
-        writeToGates(false, true, true, true, true, false);
-        break;
-      }
-      case 1: {
-        writeToGates(true, true, false, true, true, false);
-        break;
-      }
-      case 3: {
-        writeToGates(true, false, false, true, true, true);
-        break;
-      }
-      case 2: {
-        writeToGates(true, false, true, true, false, true);
-        break;
-      }
-      default: {
-        writeToGates(true, true, true, true, true, true);
-        break;
-      }
-    }
-  }
-}
-
 int main(void) {
   initTimer();
   pins();
+  while (1) {
+  }
 }
+
+void ADC0IntHandler(void) {
+  ADCIntClear(ADC0_BASE, 0);
+
+  ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
+
+  if (ui32ADC0Value[0] > vMax || ui32ADC0Value[0] < vMin ||
+      ui32ADC0Value[1] > vMax || ui32ADC0Value[1] < vMin ||
+      ui32ADC0Value[2] > vMax || ui32ADC0Value[2] < vMin) {
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
+  } else {
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
+  }
+
+  ui8Adjust = ui32ADC0Value[3] % 4096;
+  if (ui8Adjust < 1100) {
+    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, 3 * ui32Load / 1000);
+  } else if (ui8Adjust > 4000) {
+    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui32Load);
+  } else {
+    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0,
+                         (ui8Adjust - 1100) * ui32Load / 2996);
+  }
+}
+
+void GPIOIntHandler(void) {
+  GPIOIntClear(GPIO_PORTA_BASE,
+               GPIO_INT_PIN_4 | GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
+  pins();
+}
+
+void Timer0IntHandler(void) { TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT); }
