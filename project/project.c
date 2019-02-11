@@ -208,6 +208,7 @@ void ADC0IntHandler(void) {
     isWithinCurrentBound = false;
   } else {
     isWithinCurrentBound = true;
+    pins();
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   }
 
