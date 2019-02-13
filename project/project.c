@@ -24,8 +24,8 @@ void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
 
 uint32_t ui32ADC0Value[4];
-const uint32_t vMax = 4000;
-const uint32_t vMin = 600;
+const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
+const uint32_t vMin = 403;   // 0.5 / 5 * 4096
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
 volatile uint32_t ui8Adjust;

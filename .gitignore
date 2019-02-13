@@ -31,3 +31,5 @@
 \.vscode/
 
 \.jxbrowser-data/
+
+project/\.launches/
