@@ -23,12 +23,13 @@
 void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
 
-uint32_t ui32ADC0Value[4];
+uint32_t ui32ADC0Value[2];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 403;   // 0.5 / 5 * 4096
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
 volatile uint32_t ui8Adjust;
+volatile uint32_t sensedCurrent;
 volatile uint32_t abc;
 volatile bool a;
 volatile bool b;
@@ -55,7 +56,7 @@ void writeToGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL) {
   GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_5, (CL) ? GPIO_PIN_5 : 0x0);
 }
 
-void pins() {
+void changeGates() {
   if (switch1 && isWithinCurrentBound) {
     a = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_4) & GPIO_PIN_4;
     b = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3) & GPIO_PIN_3;
@@ -98,7 +99,7 @@ void pins() {
   }
 }
 
-void initTimer() {
+void configureBoard() {
   uint32_t ui32Period;
   ui8Adjust = 500;
   SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
@@ -149,16 +150,11 @@ void initTimer() {
 
   ADCSequenceConfigure(ADC0_BASE, 0, ADC_TRIGGER_TIMER, 0);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH0);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 1, ADC_CTL_CH1);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 2, ADC_CTL_CH2);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 3,
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 1,
                            ADC_CTL_CH4 | ADC_CTL_IE | ADC_CTL_END);
   ADCSequenceEnable(ADC0_BASE, 0);
 
-  GPIOPinTypeADC(
-      GPIO_PORTE_BASE,
-      GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);  // 1: Current Sensor A 2:  Current
-                                              // Sensor B 3:  Current Sensor C
+  GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1);  // Current Sensor
   GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_3);  // Throttle
 
   TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
@@ -190,8 +186,8 @@ void initTimer() {
 }
 
 int main(void) {
-  initTimer();
-  pins();
+  configureBoard();
+  changeGates();
   while (1) {
   }
 }
@@ -201,18 +197,17 @@ void ADC0IntHandler(void) {
 
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
 
-  if (ui32ADC0Value[0] > vMax || ui32ADC0Value[0] < vMin ||
-      ui32ADC0Value[1] > vMax || ui32ADC0Value[1] < vMin ||
-      ui32ADC0Value[2] > vMax || ui32ADC0Value[2] < vMin) {
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
+  sensedCurrent = ui32ADC0Value[0];
+  if (sensedCurrent > vMax || sensedCurrent < vMin) {
     isWithinCurrentBound = false;
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
   } else {
     isWithinCurrentBound = true;
-    pins();
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
+    changeGates();
   }
 
-  ui8Adjust = ui32ADC0Value[3] % 4096;
+  ui8Adjust = ui32ADC0Value[1] % 4096;
   if (ui8Adjust < 1110) {
     ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, 3 * ui32Load / 1000);
   } else if (ui8Adjust > 4000) {
@@ -226,14 +221,14 @@ void ADC0IntHandler(void) {
 void GPIOIntHandler(void) {
   GPIOIntClear(GPIO_PORTA_BASE,
                GPIO_INT_PIN_4 | GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
-  pins();
+  changeGates();
 }
 
 void GPIOBIntHandler(void) {
   GPIOIntClear(GPIO_PORTB_BASE, GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
   switch2 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_3) & GPIO_PIN_3;
   switch1 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_2) & GPIO_PIN_2;
-  pins();
+  changeGates();
 }
 
 void Timer0IntHandler(void) { TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT); }
