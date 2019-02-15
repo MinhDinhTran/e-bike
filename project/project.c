@@ -15,6 +15,7 @@
 #include "inc/hw_types.h"
 #include "inc/tm4c123gh6pm.h"
 
+#include "pid.h"
 #include "project.h"
 
 #define PWM_FREQUENCY 50000
@@ -30,10 +31,22 @@ const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 const uint32_t pwmBias = 500;
 const uint32_t pwmMIN = 50;
 const uint32_t pwmMAX = 950;
+// Current control variables
+const uint32_t k_id = 27.1378;  // I gain i-d
+const uint32_t k_pd = 0.0118;   // P gain i-d
+volatile float id_int = 0;
+volatile float id_dif = 0;
+volatile float id_err = 0;
+// Speed control variables
+const uint32_t k_is = 27.1378;  // I gain speed
+const uint32_t k_ps = 0.0118;   // P gain speed
+volatile float s_int = 0;
+volatile float s_dif = 0;
+volatile float s_err = 0;
 
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
-volatile uint32_t ui8Adjust;
+volatile uint32_t throttle;
 volatile uint32_t sensedCurrent;
 volatile uint32_t abc;
 volatile bool a;
@@ -251,12 +264,7 @@ int main(void) {
   }
 }
 
-void ADC0IntHandler(void) {
-  ADCIntClear(ADC0_BASE, 0);
-
-  ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
-
-  sensedCurrent = ui32ADC0Value[0];
+void checkCurrentLimit() {
   if (sensedCurrent > vMax || sensedCurrent < vMin) {
     isWithinCurrentBound = false;
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
@@ -264,6 +272,7 @@ void ADC0IntHandler(void) {
     isWithinCurrentBound = true;
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   }
+}
 
   ui8Adjust = (ui32ADC0Value[1] - pwmBias) * 1000 / (4096 - pwmBias);
   if (ui8Adjust < pwmMIN) {
@@ -272,6 +281,20 @@ void ADC0IntHandler(void) {
     ui8Adjust = pwmMAX;
   }
   updateGates();
+}
+
+void ADC0IntHandler(void) {
+  ADCIntClear(ADC0_BASE, 0);
+
+  ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
+
+  sensedCurrent = ui32ADC0Value[0];
+  throttle = ui32ADC0Value[1] % 4096;
+  checkCurrentLimit();
+  float currentCommand = throttle;
+  float pwmCommand = pidloop(currentCommand, sensedCurrent, false, k_pd, k_id,
+                             0f, 0.95, .001, 1, &id_int, &id_err, &id_dif);
+  updatePWM(pwmCommand);
 }
 
 void GPIOIntHandler(void) {
