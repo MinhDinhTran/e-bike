@@ -26,6 +26,11 @@ void __error__(char *pcFilename, uint32_t ui32Line) {}
 uint32_t ui32ADC0Value[2];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 403;   // 0.5 / 5 * 4096
+
+const uint32_t k_id = 27.1378; // I gain i-d
+const uint32_t k_pd = 0.0118; // P gain i-d
+
+
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
 volatile uint32_t ui8Adjust;
