@@ -27,9 +27,9 @@ uint32_t ui32ADC0Value[2];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 403;   // 0.5 / 5 * 4096
 
-const uint32_t k_id = 27.1378; // I gain i-d
-const uint32_t k_pd = 0.0118; // P gain i-d
-
+const uint32_t pwmBias = 500;
+const uint32_t pwmMIN = 50;
+const uint32_t pwmMAX = 950;
 
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
@@ -53,22 +53,22 @@ int setAbc(bool a, bool b, bool c) {
 }
 
 void writeToGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL) {
-  GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_4, (AH) ? GPIO_PIN_4 : 0x0);
-  GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_4, (AL) ? GPIO_PIN_4 : 0x0);
-  GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_0, (BH) ? GPIO_PIN_0 : 0x0);
-  GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_7, (BL) ? GPIO_PIN_7 : 0x0);
-  GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, (CH) ? GPIO_PIN_4 : 0x0);
-  GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_5, (CL) ? GPIO_PIN_5 : 0x0);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2, ((AH) ? ui8Adjust : pwmMIN) * ui32Load / 1000 );
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, ((AL) ? ui8Adjust : pwmMIN) * ui32Load / 1000 );
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4, ((BH) ? ui8Adjust : pwmMIN) * ui32Load / 1000 );
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_5, ((BL) ? ui8Adjust : pwmMIN) * ui32Load / 1000 );
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_6, ((CH) ? ui8Adjust : pwmMIN) * ui32Load / 1000 );
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ((CL) ? ui8Adjust : pwmMIN) * ui32Load / 1000 );
 }
 
-void changeGates() {
+void updateGates() {
+  a = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_4) & GPIO_PIN_4;
+  b = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3) & GPIO_PIN_3;
+  c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
+
+  abc = setAbc(a, b, c);
+  
   if (switch1 && isWithinCurrentBound) {
-    a = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_4) & GPIO_PIN_4;
-    b = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3) & GPIO_PIN_3;
-    c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
-
-    abc = setAbc(a, b, c);
-
     switch (abc) {
       case 6: {
         writeToGates(true, true, true, false, false, true);
@@ -106,7 +106,7 @@ void changeGates() {
 
 void configureBoard() {
   uint32_t ui32Period;
-  ui8Adjust = 500;
+  ui8Adjust = pwmMIN;
   SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
                  SYSCTL_OSC_MAIN);
   ROM_SysCtlPWMClockSet(SYSCTL_PWMDIV_2);
@@ -118,7 +118,7 @@ void configureBoard() {
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1);
+  SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM0);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
 
   // Define Inputs
@@ -141,14 +141,26 @@ void configureBoard() {
 
   // Configure PWM
   ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0);
+
   ROM_GPIOPinConfigure(GPIO_PD0_M1PWM0);
+  ROM_GPIOPinConfigure(GPIO_PD0_M1PWM0);
+  ROM_GPIOPinConfigure(GPIO_PD0_M1PWM0);
+  ROM_GPIOPinConfigure(GPIO_PD0_M1PWM0);
+  ROM_GPIOPinConfigure(GPIO_PD0_M1PWM0);
+  ROM_GPIOPinConfigure(GPIO_PD0_M1PWM0);
+
   ui32PWMClock = SysCtlClockGet() / 2;
   ui32Load = (ui32PWMClock / PWM_FREQUENCY) - 1;
-  PWMGenConfigure(PWM1_BASE, PWM_GEN_0, PWM_GEN_MODE_DOWN);
-  PWMGenPeriodSet(PWM1_BASE, PWM_GEN_0, ui32Load);
-  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui8Adjust * ui32Load / 1000);
-  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_0_BIT, true);
-  ROM_PWMGenEnable(PWM1_BASE, PWM_GEN_0);
+  PWMGenConfigure(PWM0_BASE, PWM_GEN_2 | PWM_GEN_3 | PWM_GEN_4| PWM_GEN_5| PWM_GEN_6| PWM_GEN_7, PWM_GEN_MODE_DOWN);
+  PWMGenPeriodSet(PWM0_BASE, PWM_GEN_2 | PWM_GEN_3 | PWM_GEN_4| PWM_GEN_5| PWM_GEN_6| PWM_GEN_7, ui32Load);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2 | PWM_OUT_3 | PWM_OUT_4 | PWM_OUT_5 | PWM_OUT_6 | PWM_OUT_7, pwmMIN * ui32Load / 1000);
+  ROM_PWMOutputState(PWM0_BASE, PWM_OUT_2_BIT|PWM_OUT_3_BIT|PWM_OUT_4_BIT|PWM_OUT_5_BIT|PWM_OUT_6_BIT|PWM_OUT_7_BIT, true);
+  ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_2 | PWM_GEN_3 | PWM_GEN_4| PWM_GEN_5| PWM_GEN_6| PWM_GEN_7);
   // Configure ADC
   ADCHardwareOversampleConfigure(ADC0_BASE, 4);
   ADCReferenceSet(ADC0_BASE, ADC_REF_INT);
@@ -192,7 +204,7 @@ void configureBoard() {
 
 int main(void) {
   configureBoard();
-  changeGates();
+  updateGates();
   while (1) {
   }
 }
@@ -209,31 +221,28 @@ void ADC0IntHandler(void) {
   } else {
     isWithinCurrentBound = true;
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
-    changeGates();
   }
 
-  ui8Adjust = ui32ADC0Value[1] % 4096;
-  if (ui8Adjust < 1110) {
-    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, 3 * ui32Load / 1000);
-  } else if (ui8Adjust > 4000) {
-    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui32Load);
-  } else {
-    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0,
-                         (ui8Adjust - 1100) * ui32Load / 2996);
+  ui8Adjust = (ui32ADC0Value[1] - pwmBias) * 1000 / (4096 - pwmBias);
+  if (ui8Adjust < pwmMIN) {
+    ui8Adjust = pwmMIN;
+  } else if (ui8Adjust > pwmMAX) {
+    ui8Adjust = pwmMAX;
   }
+  updateGates();
 }
 
 void GPIOIntHandler(void) {
   GPIOIntClear(GPIO_PORTA_BASE,
                GPIO_INT_PIN_4 | GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
-  changeGates();
+  updateGates();
 }
 
 void GPIOBIntHandler(void) {
   GPIOIntClear(GPIO_PORTB_BASE, GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
   switch2 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_3) & GPIO_PIN_3;
   switch1 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_2) & GPIO_PIN_2;
-  changeGates();
+  updateGates();
 }
 
 void Timer0IntHandler(void) { TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT); }

@@ -2,7 +2,7 @@
 #define __PROJECT_H__
 
 int setAbc(bool a, bool b, bool c);
-void writeToGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL);
+void updateGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL);
 void pins();
 void ADC0IntHandler(void);
 void GPIOIntHandler(void);
