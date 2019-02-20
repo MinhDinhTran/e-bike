@@ -24,8 +24,11 @@ void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
 
 uint32_t ui32ADC0Value[2];
-const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
-const uint32_t vMin = 403;   // 0.5 / 5 * 4096
+const uint32_t throttleMax = 3800;  // 4.5 / 5 * 4096
+const uint32_t throttleMin = 600;   // 0.5 / 5 * 4096
+
+const uint32_t vMax = 3000;  // 4.5 / 5 * 4096
+const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 
 const uint32_t k_id = 27.1378; // I gain i-d
 const uint32_t k_pd = 0.0118; // P gain i-d
@@ -209,17 +212,17 @@ void ADC0IntHandler(void) {
   } else {
     isWithinCurrentBound = true;
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
-    changeGates();
+    //changeGates();
   }
 
   ui8Adjust = ui32ADC0Value[1] % 4096;
-  if (ui8Adjust < 1110) {
-    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, 3 * ui32Load / 1000);
-  } else if (ui8Adjust > 4000) {
+  if (ui8Adjust < throttleMin) {
+    ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, 5 * ui32Load / 100);
+  } else if (ui8Adjust > throttleMax) {
     ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0, ui32Load);
   } else {
     ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_0,
-                         (ui8Adjust - 1100) * ui32Load / 2996);
+                         (ui8Adjust - throttleMin) * ui32Load / (throttleMax - throttleMin));
   }
 }
 
