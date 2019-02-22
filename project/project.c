@@ -52,19 +52,46 @@ int setAbc(bool a, bool b, bool c) {
   return abc;
 }
 
-void writeToGates(bool AH, bool AL, bool BH, bool BL, bool CH, bool CL) {
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2,
-                       ((AH) ? ui8Adjust : pwmMIN) * ui32Load / 1000);
+void pwmControl(uint32_t gateH,uint32_t  gateH_other,uint32_t gateL, uint32_t gateOff1,uint32_t gateOff2,uint32_t gateOff3){
+    setPulseWidth();
+//  Enable duty cycle for top gate
+    ROM_PWMOutputInvert(PWM0_BASE,gateH,true);
+    ROM_PWMOutputState(PWM0_BASE,gateH,true);
+//  Invert other gate of same leg
+    ROM_PWMOutputInvert(PWM0_BASE,gateH_other,false);
+    ROM_PWMOutputState(PWM0_BASE,gateH_other,true);
+
+//  SC the return path
+    ROM_PWMOutputInvert(PWM0_BASE,gateL,false);
+    ROM_PWMOutputState(PWM0_BASE,gateL,false);
+//  OC other 3 gates
+    ROM_PWMOutputInvert(PWM0_BASE,gateOff1,true);
+    ROM_PWMOutputState(PWM0_BASE,gateOff1,false);
+    ROM_PWMOutputInvert(PWM0_BASE,gateOff2,true);
+    ROM_PWMOutputState(PWM0_BASE,gateOff2,false);
+    ROM_PWMOutputInvert(PWM0_BASE,gateOff3,true);
+    ROM_PWMOutputState(PWM0_BASE,gateOff3,false);
+}
+
+void setPulseWidth(){
+
+        ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2,
+                       ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3,
-                       ((AL) ? ui8Adjust : pwmMIN) * ui32Load / 1000);
+                      ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4,
-                       ((BH) ? ui8Adjust : pwmMIN) * ui32Load / 1000);
+                       ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_5,
-                       ((BL) ? ui8Adjust : pwmMIN) * ui32Load / 1000);
+                      ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_6,
-                       ((CH) ? ui8Adjust : pwmMIN) * ui32Load / 1000);
+                      ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7,
-                       ((CL) ? ui8Adjust : pwmMIN) * ui32Load / 1000);
+                       ui8Adjust * ui32Load / 1000);
+}
+
+void turnOffPwm(){
+    ROM_PWMOutputInvert(PWM0_BASE,PWM_OUT_6_BIT|PWM_OUT_7_BIT|PWM_OUT_5_BIT|PWM_OUT_2_BIT|PWM_OUT_3_BIT|PWM_OUT_4_BIT,true);
+    ROM_PWMOutputState(PWM0_BASE,PWM_OUT_6_BIT|PWM_OUT_7_BIT|PWM_OUT_5_BIT|PWM_OUT_2_BIT|PWM_OUT_3_BIT|PWM_OUT_4_BIT,false);
 }
 
 void updateGates() {
@@ -73,40 +100,40 @@ void updateGates() {
   c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
 
   abc = setAbc(a, b, c);
-
+  
   if (switch1 && isWithinCurrentBound) {
     switch (abc) {
-      case 6: {
-        writeToGates(true, true, true, false, false, true);
+      case 6: { // C high through and B Low return
+        pwmControl(PWM_OUT_6_BIT,PWM_OUT_7_BIT,PWM_OUT_5_BIT,PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_4_BIT);
         break;
       }
-      case 4: {
-        writeToGates(false, true, true, false, true, true);
+      case 4: { // A high through and B Low return
+        pwmControl(PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_5_BIT,PWM_OUT_6_BIT,PWM_OUT_7_BIT,PWM_OUT_4_BIT);
         break;
       }
-      case 5: {
-        writeToGates(false, true, true, true, true, false);
+      case 5: { // A High and C low
+        pwmControl(PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_7_BIT,PWM_OUT_6_BIT,PWM_OUT_5_BIT,PWM_OUT_4_BIT);
         break;
       }
-      case 1: {
-        writeToGates(true, true, false, true, true, false);
+      case 1: { // B high and C low
+        pwmControl(PWM_OUT_4_BIT,PWM_OUT_5_BIT,PWM_OUT_7_BIT,PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_6_BIT);
         break;
       }
-      case 3: {
-        writeToGates(true, false, false, true, true, true);
+      case 3: { // B high and A low
+        pwmControl(PWM_OUT_4_BIT,PWM_OUT_5_BIT,PWM_OUT_3_BIT,PWM_OUT_2_BIT,PWM_OUT_7_BIT,PWM_OUT_6_BIT);
         break;
       }
-      case 2: {
-        writeToGates(true, false, true, true, false, true);
+      case 2: { // C high and A low
+        pwmControl(PWM_OUT_6_BIT,PWM_OUT_7_BIT,PWM_OUT_3_BIT,PWM_OUT_2_BIT,PWM_OUT_4_BIT,PWM_OUT_5_BIT);
         break;
       }
       default: {
-        writeToGates(true, true, true, true, true, true);
+        turnOffPwm();
         break;
       }
     }
   } else {
-    writeToGates(true, true, true, true, true, true);
+    turnOffPwm();
   }
 }
 
