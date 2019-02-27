@@ -1,8 +1,9 @@
 #include <stdbool.h>
 
-float pidloop(float y_c, float y, bool reset, float kp, float ki, float kd,
-              float limit, float Ts, float tau, float *integrator,
-              float *error_d1, float *differentiator) {
+float pidloop(float y_c, float y, bool reset,
+              float kp, float ki, float kd,
+              float limit, float Ts, float tau,
+              float *integrator, float *error_d1, float *differentiator) {
   // reset(initialize) persistent variables when flag==1
   if (reset) {
     *integrator = 0;
@@ -26,9 +27,9 @@ float pidloop(float y_c, float y, bool reset, float kp, float ki, float kd,
   return u;
 }
 
-float sat(float in, float limit) { return sat(in, limit, -limit); }
+float sat(float in, float limit) { return sat_dual(in, limit, -limit); }
 
-float sat(float in, float upperLimit, float lowerLimit) {
+float sat_dual(float in, float upperLimit, float lowerLimit) {
   if (in > upperLimit) {
     return upperLimit;
   } else if (in < lowerLimit) {

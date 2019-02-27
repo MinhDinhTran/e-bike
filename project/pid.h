@@ -7,6 +7,6 @@ float pidloop(float y_c, float y, bool reset, float kp, float ki, float kd,
 
 float sat(float in, float limit);
 
-float sat(float in, float upperLimit, float lowerLimit);
+float sat_dual(float in, float upperLimit, float lowerLimit);
 
 #endif  // __PID_H__

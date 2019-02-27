@@ -9,6 +9,7 @@
 #include "driverlib/rom.h"
 #include "driverlib/sysctl.h"
 #include "driverlib/timer.h"
+#include "driverlib/fpu.h"
 
 #include "inc/hw_gpio.h"
 #include "inc/hw_memmap.h"
@@ -28,18 +29,22 @@ uint32_t ui32ADC0Value[2];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 
+const float iM = 25/2048;  // (actual current) = m(sensed value) + b
+const float iB = -25;   // 2.5 / 5 * 4096
+
 const uint32_t pwmBias = 500;
 const uint32_t pwmMIN = 50;
 const uint32_t pwmMAX = 950;
+volatile uint32_t ui8Adjust;
 // Current control variables
-const uint32_t k_id = 27.1378;  // I gain i-d
-const uint32_t k_pd = 0.0118;   // P gain i-d
-volatile float id_int = 0;
-volatile float id_dif = 0;
-volatile float id_err = 0;
+const float k_id = 27.1378;  // I gain i-d
+const float k_pd = 0.0118;   // P gain i-d
+float id_int = 0;
+float id_dif = 0;
+float id_err = 0;
 // Speed control variables
-const uint32_t k_is = 27.1378;  // I gain speed
-const uint32_t k_ps = 0.0118;   // P gain speed
+const float k_is = 96331;  // I gain speed
+const float k_ps = 3679.6;   // P gain speed
 volatile float s_int = 0;
 volatile float s_dif = 0;
 volatile float s_err = 0;
@@ -87,7 +92,6 @@ void pwmControl(uint32_t gateH,uint32_t  gateH_other,uint32_t gateL, uint32_t ga
 }
 
 void setPulseWidth(){
-
         ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2,
                        ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3,
@@ -153,6 +157,10 @@ void updateGates() {
 void configureBoard() {
   uint32_t ui32Period;
   ui8Adjust = pwmMIN;
+
+  ROM_FPULazyStackingEnable();
+  ROM_FPUEnable();
+
   SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
                  SYSCTL_OSC_MAIN);
   ROM_SysCtlPWMClockSet(SYSCTL_PWMDIV_2);
@@ -272,15 +280,17 @@ void checkCurrentLimit() {
     isWithinCurrentBound = true;
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   }
+  updateGates();
 }
 
-  ui8Adjust = (ui32ADC0Value[1] - pwmBias) * 1000 / (4096 - pwmBias);
+void updatePWM(float dutyCycle){
+  ui8Adjust = dutyCycle * 1000;
   if (ui8Adjust < pwmMIN) {
     ui8Adjust = pwmMIN;
   } else if (ui8Adjust > pwmMAX) {
     ui8Adjust = pwmMAX;
   }
-  updateGates();
+  setPulseWidth();
 }
 
 void ADC0IntHandler(void) {
@@ -292,9 +302,8 @@ void ADC0IntHandler(void) {
   throttle = ui32ADC0Value[1] % 4096;
   checkCurrentLimit();
   float currentCommand = throttle;
-  float pwmCommand = pidloop(currentCommand, sensedCurrent, false, k_pd, k_id,
-                             0f, 0.95, .001, 1, &id_int, &id_err, &id_dif);
-  updatePWM(pwmCommand);
+  float dutyCycle = pidloop(currentCommand, sensedCurrent, false, k_pd, k_id, 0, 0.95, .001, 1, &id_int, &id_err, &id_dif);
+  updatePWM(dutyCycle);
 }
 
 void GPIOIntHandler(void) {
