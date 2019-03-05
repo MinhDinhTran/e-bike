@@ -21,6 +21,13 @@
 
 #define PWM_FREQUENCY 50000
 
+#define AH_TAG 0
+#define AL_TAG 1
+#define BH_TAG 2
+#define BL_TAG 3
+#define CH_TAG 4
+#define CL_TAG 5
+
 #ifdef DEBUG
 void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
@@ -70,45 +77,81 @@ int setAbc(bool a, bool b, bool c) {
   return abc;
 }
 
-void pwmControl(uint32_t gateH,uint32_t  gateH_other,uint32_t gateL, uint32_t gateOff1,uint32_t gateOff2,uint32_t gateOff3){
-    setPulseWidth();
-//  Enable duty cycle for top gate
-    ROM_PWMOutputInvert(PWM0_BASE,gateH,true);
-    ROM_PWMOutputState(PWM0_BASE,gateH,true);
-//  Invert other gate of same leg
-    ROM_PWMOutputInvert(PWM0_BASE,gateH_other,false);
-    ROM_PWMOutputState(PWM0_BASE,gateH_other,true);
-
-//  SC the return path
-    ROM_PWMOutputInvert(PWM0_BASE,gateL,false);
-    ROM_PWMOutputState(PWM0_BASE,gateL,false);
-//  OC other 3 gates
-    ROM_PWMOutputInvert(PWM0_BASE,gateOff1,true);
-    ROM_PWMOutputState(PWM0_BASE,gateOff1,false);
-    ROM_PWMOutputInvert(PWM0_BASE,gateOff2,true);
-    ROM_PWMOutputState(PWM0_BASE,gateOff2,false);
-    ROM_PWMOutputInvert(PWM0_BASE,gateOff3,true);
-    ROM_PWMOutputState(PWM0_BASE,gateOff3,false);
+uint32_t getOutBit(uint32_t pin_value) {
+  switch (pin_value) {
+    case AH_TAG:
+      return PWM_OUT_6_BIT;
+    case AL_TAG:
+      return PWM_OUT_7_BIT;
+    case BH_TAG:
+      return PWM_OUT_6_BIT;
+    case BL_TAG:
+      return PWM_OUT_7_BIT;
+    case CH_TAG:
+      return PWM_OUT_1_BIT;
+    case CL_TAG:
+      return PWM_OUT_0_BIT;
+    default:
+      return PWM_OUT_0_BIT;
+  }
 }
 
-void setPulseWidth(){
-        ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2,
-                       ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3,
-                      ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4,
-                       ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_5,
-                      ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_6,
-                      ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7,
-                       ui8Adjust * ui32Load / 1000);
+void pwmControl(uint32_t gateH, uint32_t gateH_other, uint32_t gateL,
+                uint32_t gateOff1, uint32_t gateOff2, uint32_t gateOff3) {
+  uint32_t gateHBase =
+      (gateH == AH_TAG || gateH == AL_TAG) ? PWM1_BASE : PWM0_BASE;
+  uint32_t gateLBase =
+      (gateL == AH_TAG || gateL == AL_TAG) ? PWM1_BASE : PWM0_BASE;
+  uint32_t otherBase =
+      (gateOff2 == AH_TAG || gateOff2 == AL_TAG) ? PWM1_BASE : PWM0_BASE;
+
+  uint32_t pinH = getOutBit(gateH);
+  uint32_t pinH_O = getOutBit(gateH_other);
+  uint32_t pinL = getOutBit(gateL);
+  uint32_t pinL_O = getOutBit(gateOff1);
+  uint32_t pinO = getOutBit(gateOff2);
+  uint32_t pinO_O = getOutBit(gateOff3);
+
+  setPulseWidth();
+
+  //  Enable duty cycle for top gate
+  ROM_PWMOutputInvert(gateHBase, pinH, true);
+  ROM_PWMOutputState(gateHBase, pinH, true);
+  //  Invert other gate of same leg
+  ROM_PWMOutputInvert(gateHBase, pinH_O, false);
+  ROM_PWMOutputState(gateHBase, pinH_O, true);
+
+  //  SC the return path
+  ROM_PWMOutputInvert(gateLBase, pinL, false);
+  ROM_PWMOutputState(gateLBase, pinL, false);
+  //  OC other 3 gates
+  ROM_PWMOutputInvert(gateLBase, pinL_O, true);
+  ROM_PWMOutputState(gateLBase, pinL_O, false);
+  ROM_PWMOutputInvert(otherBase, pinO, true);
+  ROM_PWMOutputState(otherBase, pinO, false);
+  ROM_PWMOutputInvert(otherBase, pinO_O, true);
+  ROM_PWMOutputState(otherBase, pinO_O, false);
 }
 
-void turnOffPwm(){
-    ROM_PWMOutputInvert(PWM0_BASE,PWM_OUT_6_BIT|PWM_OUT_7_BIT|PWM_OUT_5_BIT|PWM_OUT_2_BIT|PWM_OUT_3_BIT|PWM_OUT_4_BIT,true);
-    ROM_PWMOutputState(PWM0_BASE,PWM_OUT_6_BIT|PWM_OUT_7_BIT|PWM_OUT_5_BIT|PWM_OUT_2_BIT|PWM_OUT_3_BIT|PWM_OUT_4_BIT,false);
+void setPulseWidth() {
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, ui8Adjust * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, ui8Adjust * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0, ui8Adjust * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_1, ui8Adjust * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_6, ui8Adjust * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui8Adjust * ui32Load / 1000);
+}
+
+void turnOffPwm() {
+  ROM_PWMOutputInvert(PWM1_BASE, PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
+  ROM_PWMOutputInvert(
+      PWM0_BASE, PWM_OUT_0_BIT | PWM_OUT_1_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
+      true);
+
+  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT | PWM_OUT_7_BIT, false);
+  ROM_PWMOutputState(
+      PWM0_BASE, PWM_OUT_1_BIT | PWM_OUT_0_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
+      false);
 }
 
 void updateGates() {
@@ -117,31 +160,31 @@ void updateGates() {
   c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
 
   abc = setAbc(a, b, c);
-  
+
   if (switch1 && isWithinCurrentBound) {
     switch (abc) {
-      case 6: { // C high through and B Low return
-        pwmControl(PWM_OUT_6_BIT,PWM_OUT_7_BIT,PWM_OUT_5_BIT,PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_4_BIT);
+      case 6: {  // C high through and B Low return
+        pwmControl(CH_TAG, CL_TAG, BL_TAG, BH_TAG, AH_TAG, AL_TAG);
         break;
       }
-      case 4: { // A high through and B Low return
-        pwmControl(PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_5_BIT,PWM_OUT_6_BIT,PWM_OUT_7_BIT,PWM_OUT_4_BIT);
+      case 4: {  // A high through and B Low return
+        pwmControl(AH_TAG, AL_TAG, BL_TAG, BH_TAG, CH_TAG, CL_TAG);
         break;
       }
-      case 5: { // A High and C low
-        pwmControl(PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_7_BIT,PWM_OUT_6_BIT,PWM_OUT_5_BIT,PWM_OUT_4_BIT);
+      case 5: {  // A High and C low
+        pwmControl(AH_TAG, AL_TAG, CL_TAG, CH_TAG, BH_TAG, BL_TAG);
         break;
       }
-      case 1: { // B high and C low
-        pwmControl(PWM_OUT_4_BIT,PWM_OUT_5_BIT,PWM_OUT_7_BIT,PWM_OUT_2_BIT,PWM_OUT_3_BIT,PWM_OUT_6_BIT);
+      case 1: {  // B high and C low
+        pwmControl(BH_TAG, BL_TAG, CL_TAG, CH_TAG, AH_TAG, AL_TAG);
         break;
       }
-      case 3: { // B high and A low
-        pwmControl(PWM_OUT_4_BIT,PWM_OUT_5_BIT,PWM_OUT_3_BIT,PWM_OUT_2_BIT,PWM_OUT_7_BIT,PWM_OUT_6_BIT);
+      case 3: {  // B high and A low
+        pwmControl(BH_TAG, BL_TAG, AL_TAG, AH_TAG, CH_TAG, CL_TAG);
         break;
       }
-      case 2: { // C high and A low
-        pwmControl(PWM_OUT_6_BIT,PWM_OUT_7_BIT,PWM_OUT_3_BIT,PWM_OUT_2_BIT,PWM_OUT_4_BIT,PWM_OUT_5_BIT);
+      case 2: {  // C high and A low
+        pwmControl(CH_TAG, CL_TAG, AL_TAG, AH_TAG, BH_TAG, BL_TAG);
         break;
       }
       default: {
@@ -173,6 +216,7 @@ void configureBoard() {
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM0);
+  SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
 
   // Define Inputs
@@ -184,45 +228,50 @@ void configureBoard() {
   GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_3);  // 3 Pos 2
 
   // Define Outputs
-  GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE,
-                        GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);  // LEDS
+  GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1);  // LEDS
+  GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_2);  // LEDS
+  GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_3);  // LEDS
 
+  GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   // Configure PWM
-  ROM_GPIOPinTypePWM(GPIO_PORTB_BASE, GPIO_PIN_4); // AH
-  ROM_GPIOPinTypePWM(GPIO_PORTB_BASE, GPIO_PIN_5); // AL
-  ROM_GPIOPinTypePWM(GPIO_PORTE_BASE, GPIO_PIN_4); // BH
-  ROM_GPIOPinTypePWM(GPIO_PORTE_BASE, GPIO_PIN_5); // BL
-  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_0); // CH
-  ROM_GPIOPinTypePWM(GPIO_PORTD_BASE, GPIO_PIN_1); // CL
+  ROM_GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_2);  // AH
+  ROM_GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_3);  // AL
+  ROM_GPIOPinTypePWM(GPIO_PORTC_BASE, GPIO_PIN_4);  // BH
+  ROM_GPIOPinTypePWM(GPIO_PORTC_BASE, GPIO_PIN_5);  // BL
+  ROM_GPIOPinTypePWM(GPIO_PORTB_BASE, GPIO_PIN_7);  // CH
+  ROM_GPIOPinTypePWM(GPIO_PORTB_BASE, GPIO_PIN_6);  // CL
 
-  ROM_GPIOPinConfigure(GPIO_PB4_M0PWM2);
-  ROM_GPIOPinConfigure(GPIO_PB5_M0PWM3);
-  ROM_GPIOPinConfigure(GPIO_PE4_M0PWM4);
-  ROM_GPIOPinConfigure(GPIO_PE5_M0PWM5);
-  ROM_GPIOPinConfigure(GPIO_PD0_M0PWM6);
-  ROM_GPIOPinConfigure(GPIO_PD1_M0PWM7);
+  ROM_GPIOPinConfigure(GPIO_PF2_M1PWM6);
+  ROM_GPIOPinConfigure(GPIO_PF3_M1PWM7);
+  ROM_GPIOPinConfigure(GPIO_PC4_M0PWM6);
+  ROM_GPIOPinConfigure(GPIO_PC5_M0PWM7);
+  ROM_GPIOPinConfigure(GPIO_PB7_M0PWM1);
+  ROM_GPIOPinConfigure(GPIO_PB6_M0PWM0);
 
   ui32PWMClock = SysCtlClockGet() / 2;
   ui32Load = (ui32PWMClock / PWM_FREQUENCY) - 1;
-  PWMGenConfigure(PWM0_BASE, PWM_GEN_1, PWM_GEN_MODE_DOWN);
-  PWMGenConfigure(PWM0_BASE, PWM_GEN_2, PWM_GEN_MODE_DOWN);
+
+  PWMGenConfigure(PWM1_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN);
   PWMGenConfigure(PWM0_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN);
+  PWMGenConfigure(PWM0_BASE, PWM_GEN_0, PWM_GEN_MODE_DOWN);
 
-  PWMGenPeriodSet(PWM0_BASE, PWM_GEN_1, ui32Load);
-  PWMGenPeriodSet(PWM0_BASE, PWM_GEN_2, ui32Load);
+  PWMGenPeriodSet(PWM1_BASE, PWM_GEN_3, ui32Load);
   PWMGenPeriodSet(PWM0_BASE, PWM_GEN_3, ui32Load);
+  PWMGenPeriodSet(PWM0_BASE, PWM_GEN_0, ui32Load);
 
-  ROM_PWMPulseWidthSet(
-      PWM0_BASE,
-      PWM_OUT_2 | PWM_OUT_3 | PWM_OUT_4 | PWM_OUT_5 | PWM_OUT_6 | PWM_OUT_7,
-      pwmMIN * ui32Load / 1000);
-  ROM_PWMOutputState(PWM0_BASE,
-                     PWM_OUT_2_BIT | PWM_OUT_3_BIT | PWM_OUT_4_BIT |
-                         PWM_OUT_5_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
-                     true);
-  ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_1);
-  ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_2);
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6 | PWM_OUT_7,
+                       pwmMIN * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0 | PWM_OUT_1 | PWM_OUT_6 | PWM_OUT_7,
+                       pwmMIN * ui32Load / 1000);
+
+  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
+  ROM_PWMOutputState(
+      PWM0_BASE, PWM_OUT_0_BIT | PWM_OUT_1_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
+      true);
+
+  ROM_PWMGenEnable(PWM1_BASE, PWM_GEN_3);
   ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_3);
+  ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_0);
 
   // Configure ADC
   ADCHardwareOversampleConfigure(ADC0_BASE, 4);
@@ -275,10 +324,10 @@ int main(void) {
 void checkCurrentLimit() {
   if (sensedCurrent > vMax || sensedCurrent < vMin) {
     isWithinCurrentBound = false;
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 4);
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
   } else {
     isWithinCurrentBound = true;
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
   }
   updateGates();
 }
