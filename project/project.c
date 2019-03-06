@@ -169,7 +169,7 @@ void updateGates() {
 
   abc = setAbc(a, b, c);
 //  if(DEBUG == 1){
-      abc = 6;
+      // abc = 6;
 //  }
 
   if (switch1 && isWithinCurrentBound) {
@@ -333,10 +333,11 @@ int main(void) {
 }
 
 void checkCurrentLimit() {
-    if(DEBUG == 1) {
-        isWithinCurrentBound = true;
-        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
-    } else if (sensedCurrent > vMax || sensedCurrent < vMin) {
+    // if(DEBUG == 1) {
+    //     isWithinCurrentBound = true;
+    //     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
+    // } else
+     if (sensedCurrent > vMax || sensedCurrent < vMin) {
      isWithinCurrentBound = false;
      GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
    } else {
@@ -375,11 +376,13 @@ void ADC0IntHandler(void) {
   throttle = ui32ADC0Value[1];
   checkCurrentLimit();
 
-//  sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
-  sensedCurrentFloat = 7.0;
+  sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+//  sensedCurrentFloat = 7.0;
 
   // speedCommand = getSpeedCommand(throttle);
-  currentCommand = getCurrentCommand(throttle);
+ currentCommand = getCurrentCommand(throttle);
+  // currentCommand = 7.0;
+
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/5000.0, &s_int, &s_err);
 
