@@ -357,7 +357,9 @@ void updatePWM(float dutyCycle){
 }
 
 float getCurrentCommand(uint32_t digitalValue){
-  return digitalValue/ 4096.0 * 15;
+    if(digitalValue < 685) digitalValue = 685;\
+    if(digitalValue > 3370) digitalValue = 3370;
+  return (digitalValue - 685)/ (3370.0 - 685) * 15;
 }
 
 float getSensedCurrentFloat(uint32_t digitalValue){
@@ -373,10 +375,11 @@ void ADC0IntHandler(void) {
   throttle = ui32ADC0Value[1];
   checkCurrentLimit();
 
-  sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+//  sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+  sensedCurrentFloat = 7.0;
+
   // speedCommand = getSpeedCommand(throttle);
   currentCommand = getCurrentCommand(throttle);
-
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/5000.0, &s_int, &s_err);
 
