@@ -56,6 +56,13 @@ volatile float s_int = 0;
 volatile float s_dif = 0;
 volatile float s_err = 0;
 
+volatile float sensedCurrentFloat = 0;
+volatile float sensedSpeed = 0;
+volatile float speedCommand = 0;
+
+volatile float currentCommand = 0;
+volatile float dutyCycle = 0;
+
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
 volatile uint32_t throttle;
@@ -278,7 +285,7 @@ void configureBoard() {
   ADCReferenceSet(ADC0_BASE, ADC_REF_INT);
 
   ADCSequenceConfigure(ADC0_BASE, 0, ADC_TRIGGER_TIMER, 0);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH0);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH2);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 1,
                            ADC_CTL_CH4 | ADC_CTL_IE | ADC_CTL_END);
   ADCSequenceEnable(ADC0_BASE, 0);
@@ -348,10 +355,15 @@ void ADC0IntHandler(void) {
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
 
   sensedCurrent = ui32ADC0Value[0];
-  throttle = ui32ADC0Value[1] % 4096;
+  throttle = ui32ADC0Value[1];
   checkCurrentLimit();
-  float currentCommand = throttle;
-  float dutyCycle = pidloop(currentCommand, sensedCurrent, false, k_pd, k_id, 0, 0.95, .001, 1, &id_int, &id_err, &id_dif);
+
+  sensedCurrentFloat = (sensedCurrent - 2048.0)/4096.0 * 50.0;
+
+  //sensedCurrentFloat = 16.0;
+  currentCommand = throttle/ 4096.0 * 15;
+  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
+  k_pd, k_id, 0, 0.05, 0.95, 1.0/5000.0, &id_int, &id_err);
   updatePWM(dutyCycle);
 }
 
