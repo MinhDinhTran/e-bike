@@ -20,6 +20,7 @@
 #include "project.h"
 
 #define PWM_FREQUENCY 50000
+#define DEBUG 1
 
 #define AH_TAG 0
 #define AL_TAG 1
@@ -167,6 +168,9 @@ void updateGates() {
   c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
 
   abc = setAbc(a, b, c);
+//  if(DEBUG == 1){
+      abc = 6;
+//  }
 
   if (switch1 && isWithinCurrentBound) {
     switch (abc) {
@@ -329,13 +333,16 @@ int main(void) {
 }
 
 void checkCurrentLimit() {
-  if (sensedCurrent > vMax || sensedCurrent < vMin) {
-    isWithinCurrentBound = false;
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
-  } else {
+    if(DEBUG == 1) {
+        isWithinCurrentBound = true;
+        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
+    } else if (sensedCurrent > vMax || sensedCurrent < vMin) {
+     isWithinCurrentBound = false;
+     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
+   } else {
     isWithinCurrentBound = true;
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
-  }
+   }
   updateGates();
 }
 
@@ -349,6 +356,14 @@ void updatePWM(float dutyCycle){
   setPulseWidth();
 }
 
+float getCurrentCommand(uint32_t digitalValue){
+  return digitalValue/ 4096.0 * 15;
+}
+
+float getSensedCurrentFloat(uint32_t digitalValue){
+   return (digitalValue - 2048.0)/4096.0 * 50.0;
+}
+
 void ADC0IntHandler(void) {
   ADCIntClear(ADC0_BASE, 0);
 
@@ -358,12 +373,15 @@ void ADC0IntHandler(void) {
   throttle = ui32ADC0Value[1];
   checkCurrentLimit();
 
-  sensedCurrentFloat = (sensedCurrent - 2048.0)/4096.0 * 50.0;
+  sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+  // speedCommand = getSpeedCommand(throttle);
+  currentCommand = getCurrentCommand(throttle);
 
-  //sensedCurrentFloat = 16.0;
-  currentCommand = throttle/ 4096.0 * 15;
+  // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
+  // k_ps, k_is, 0.0, 10, 1.0/5000.0, &s_int, &s_err);
+
   dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
-  k_pd, k_id, 0, 0.05, 0.95, 1.0/5000.0, &id_int, &id_err);
+  k_pd, k_id, 0.05, 0.95, 1.0/5000.0, &id_int, &id_err);
   updatePWM(dutyCycle);
 }
 
