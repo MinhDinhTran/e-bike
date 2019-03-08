@@ -20,7 +20,13 @@
 #include "project.h"
 
 #define PWM_FREQUENCY 50000
+#define TIMER_FREQUENCY 2000
 #define DEBUG 1
+#define PI 3.14159
+#define TICK_PER_REV 69
+#define SPEED_SENSOR_DELAY 1000
+
+#define RADIUS .6604
 
 #define AH_TAG 0
 #define AL_TAG 1
@@ -61,6 +67,9 @@ volatile float sensedCurrentFloat = 0;
 volatile float sensedSpeed = 0;
 volatile float speedCommand = 0;
 
+volatile uint32_t speedSensorCount = 0;
+
+
 volatile float currentCommand = 0;
 volatile float dutyCycle = 0;
 
@@ -72,6 +81,8 @@ volatile uint32_t abc;
 volatile bool a;
 volatile bool b;
 volatile bool c;
+
+volatile uint32_t hallCount = 0;
 
 volatile bool switch1 = true;
 volatile bool switch2 = true;
@@ -298,8 +309,8 @@ void configureBoard() {
   GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_3);  // Throttle
 
   TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
-  ui32Period = (SysCtlClockGet() / 10) / 2;
-  TimerLoadSet(TIMER0_BASE, TIMER_A, ui32Period - 1);
+  ui32Period = (ui32PWMClock/ TIMER_FREQUENCY) - 1;
+  TimerLoadSet(TIMER0_BASE, TIMER_A, ui32Period);
   TimerControlTrigger(TIMER0_BASE, TIMER_A, true);
   // Interupt enable
   ADCIntRegister(ADC0_BASE, 0, ADC0IntHandler);
@@ -334,16 +345,16 @@ int main(void) {
 
 void checkCurrentLimit() {
     // if(DEBUG == 1) {
-    //     isWithinCurrentBound = true;
-    //     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
+        isWithinCurrentBound = true;
+        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
     // } else
-     if (sensedCurrent > vMax || sensedCurrent < vMin) {
-     isWithinCurrentBound = false;
-     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
-   } else {
-    isWithinCurrentBound = true;
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
-   }
+  //    if (sensedCurrent > vMax || sensedCurrent < vMin) {
+  //    isWithinCurrentBound = false;
+  //    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
+  //  } else {
+  //   isWithinCurrentBound = true;
+  //   GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
+  //  }
   updateGates();
 }
 
@@ -367,33 +378,41 @@ float getSensedCurrentFloat(uint32_t digitalValue){
    return (digitalValue - 2048.0)/4096.0 * 50.0;
 }
 
+
+
 void ADC0IntHandler(void) {
   ADCIntClear(ADC0_BASE, 0);
-
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
 
   sensedCurrent = ui32ADC0Value[0];
   throttle = ui32ADC0Value[1];
   checkCurrentLimit();
 
-  sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
-//  sensedCurrentFloat = 7.0;
+  if(speedSensorCount++ > SPEED_SENSOR_DELAY) {
+  speedSensorCount = 0;
+  sensedSpeed = 2*PI*hallCount*RADIUS*TIMER_FREQUENCY/(TICK_PER_REV*SPEED_SENSOR_DELAY);
+  hallCount = 0;
+  }
 
+  // sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+ sensedCurrentFloat = 1.0;
   // speedCommand = getSpeedCommand(throttle);
  currentCommand = getCurrentCommand(throttle);
-  // currentCommand = 7.0;
+  // currentCommand = 2.0;
 
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
-  // k_ps, k_is, 0.0, 10, 1.0/5000.0, &s_int, &s_err);
+  // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
 
   dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
-  k_pd, k_id, 0.05, 0.95, 1.0/5000.0, &id_int, &id_err);
+  k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
   updatePWM(dutyCycle);
+
 }
 
 void GPIOIntHandler(void) {
   GPIOIntClear(GPIO_PORTA_BASE,
                GPIO_INT_PIN_4 | GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
+  hallCount++;
   updateGates();
 }
 
