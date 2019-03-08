@@ -23,7 +23,7 @@
 #define TIMER_FREQUENCY 2000
 #define DEBUG 1
 #define PI 3.14159
-#define TICK_PER_REV 69
+#define TICK_PER_REV 138
 #define SPEED_SENSOR_DELAY 1000
 
 #define RADIUS .6604
@@ -309,7 +309,7 @@ void configureBoard() {
   GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_3);  // Throttle
 
   TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
-  ui32Period = (ui32PWMClock/ TIMER_FREQUENCY) - 1;
+  ui32Period = (SysCtlClockGet()  / TIMER_FREQUENCY) - 1;
   TimerLoadSet(TIMER0_BASE, TIMER_A, ui32Period);
   TimerControlTrigger(TIMER0_BASE, TIMER_A, true);
   // Interupt enable
