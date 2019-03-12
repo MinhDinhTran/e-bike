@@ -39,7 +39,7 @@
 void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
 
-uint32_t ui32ADC0Value[2];
+uint32_t ui32ADC0Value[4];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 
@@ -76,6 +76,11 @@ volatile float dutyCycle = 0;
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
 volatile uint32_t throttle;
+
+volatile uint32_t current_10[10];
+volatile uint32_t currentIndex = 0;
+
+
 volatile uint32_t sensedCurrent;
 volatile uint32_t abc;
 volatile bool a;
@@ -115,14 +120,18 @@ uint32_t getOutBit(uint32_t pin_value) {
   }
 }
 
+uint32_t getBase(uint32_t gate){
+   return (gate == AH_TAG || gate == AL_TAG  || gate == CH_TAG) ? PWM1_BASE : PWM0_BASE;
+}
+
 void pwmControl(uint32_t gateH, uint32_t gateH_other, uint32_t gateL,
                 uint32_t gateOff1, uint32_t gateOff2, uint32_t gateOff3) {
-  uint32_t gateHBase =
-      (gateH == AH_TAG || gateH == AL_TAG) ? PWM1_BASE : PWM0_BASE;
-  uint32_t gateLBase =
-      (gateL == AH_TAG || gateL == AL_TAG) ? PWM1_BASE : PWM0_BASE;
-  uint32_t otherBase =
-      (gateOff2 == AH_TAG || gateOff2 == AL_TAG) ? PWM1_BASE : PWM0_BASE;
+  uint32_t gateHBase = getBase(gateH);
+  uint32_t gateHLBase = getBase(gateH_other);
+  uint32_t gateLBase = getBase(gateL);
+  uint32_t gateLLBase = getBase(gateOff1);
+  uint32_t otherBase = getBase(gateOff2);
+  uint32_t otherLBase = getBase(gateOff3);
 
   uint32_t pinH = getOutBit(gateH);
   uint32_t pinH_O = getOutBit(gateH_other);
@@ -137,39 +146,39 @@ void pwmControl(uint32_t gateH, uint32_t gateH_other, uint32_t gateL,
   ROM_PWMOutputInvert(gateHBase, pinH, true);
   ROM_PWMOutputState(gateHBase, pinH, true);
   //  Invert other gate of same leg
-  ROM_PWMOutputInvert(gateHBase, pinH_O, false);
-  ROM_PWMOutputState(gateHBase, pinH_O, true);
+  ROM_PWMOutputInvert(gateHLBase, pinH_O, false);
+  ROM_PWMOutputState(gateHLBase, pinH_O, true);
 
   //  SC the return path
   ROM_PWMOutputInvert(gateLBase, pinL, false);
   ROM_PWMOutputState(gateLBase, pinL, false);
   //  OC other 3 gates
-  ROM_PWMOutputInvert(gateLBase, pinL_O, true);
-  ROM_PWMOutputState(gateLBase, pinL_O, false);
+  ROM_PWMOutputInvert(gateLLBase, pinL_O, true);
+  ROM_PWMOutputState(gateLLBase, pinL_O, false);
   ROM_PWMOutputInvert(otherBase, pinO, true);
   ROM_PWMOutputState(otherBase, pinO, false);
-  ROM_PWMOutputInvert(otherBase, pinO_O, true);
-  ROM_PWMOutputState(otherBase, pinO_O, false);
+  ROM_PWMOutputInvert(otherLBase, pinO_O, true);
+  ROM_PWMOutputState(otherLBase, pinO_O, false);
 }
 
 void setPulseWidth() {
   ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0, ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_1, ui8Adjust * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_4, ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_6, ui8Adjust * ui32Load / 1000);
   ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui8Adjust * ui32Load / 1000);
 }
 
 void turnOffPwm() {
-  ROM_PWMOutputInvert(PWM1_BASE, PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
+  ROM_PWMOutputInvert(PWM1_BASE, PWM_OUT_4_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
   ROM_PWMOutputInvert(
-      PWM0_BASE, PWM_OUT_0_BIT | PWM_OUT_1_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
+      PWM0_BASE, PWM_OUT_0_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
       true);
 
-  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT | PWM_OUT_7_BIT, false);
+  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_4_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT, false);
   ROM_PWMOutputState(
-      PWM0_BASE, PWM_OUT_1_BIT | PWM_OUT_0_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
+      PWM0_BASE, PWM_OUT_0_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
       false);
 }
 
@@ -260,14 +269,14 @@ void configureBoard() {
   ROM_GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_3);  // AL
   ROM_GPIOPinTypePWM(GPIO_PORTC_BASE, GPIO_PIN_4);  // BH
   ROM_GPIOPinTypePWM(GPIO_PORTC_BASE, GPIO_PIN_5);  // BL
-  ROM_GPIOPinTypePWM(GPIO_PORTB_BASE, GPIO_PIN_7);  // CH
+  ROM_GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_0);  // CH
   ROM_GPIOPinTypePWM(GPIO_PORTB_BASE, GPIO_PIN_6);  // CL
 
   ROM_GPIOPinConfigure(GPIO_PF2_M1PWM6);
   ROM_GPIOPinConfigure(GPIO_PF3_M1PWM7);
   ROM_GPIOPinConfigure(GPIO_PC4_M0PWM6);
   ROM_GPIOPinConfigure(GPIO_PC5_M0PWM7);
-  ROM_GPIOPinConfigure(GPIO_PB7_M0PWM1);
+  ROM_GPIOPinConfigure(GPIO_PF0_M1PWM4);
   ROM_GPIOPinConfigure(GPIO_PB6_M0PWM0);
 
   ui32PWMClock = SysCtlClockGet() / 2;
@@ -278,20 +287,22 @@ void configureBoard() {
   PWMGenConfigure(PWM0_BASE, PWM_GEN_0, PWM_GEN_MODE_DOWN);
 
   PWMGenPeriodSet(PWM1_BASE, PWM_GEN_3, ui32Load);
+  PWMGenPeriodSet(PWM1_BASE, PWM_GEN_2, ui32Load);
   PWMGenPeriodSet(PWM0_BASE, PWM_GEN_3, ui32Load);
   PWMGenPeriodSet(PWM0_BASE, PWM_GEN_0, ui32Load);
 
-  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6 | PWM_OUT_7,
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6 | PWM_OUT_7 | PWM_OUT_4,
                        pwmMIN * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0 | PWM_OUT_1 | PWM_OUT_6 | PWM_OUT_7,
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0 | PWM_OUT_6 | PWM_OUT_7,
                        pwmMIN * ui32Load / 1000);
 
-  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
+  ROM_PWMOutputState(PWM1_BASE, PWM_OUT_4_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
   ROM_PWMOutputState(
-      PWM0_BASE, PWM_OUT_0_BIT | PWM_OUT_1_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
+      PWM0_BASE, PWM_OUT_0_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
       true);
 
   ROM_PWMGenEnable(PWM1_BASE, PWM_GEN_3);
+  ROM_PWMGenEnable(PWM1_BASE, PWM_GEN_2);
   ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_3);
   ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_0);
 
@@ -299,13 +310,22 @@ void configureBoard() {
   ADCHardwareOversampleConfigure(ADC0_BASE, 4);
   ADCReferenceSet(ADC0_BASE, ADC_REF_INT);
 
+// 1 6 5
+
   ADCSequenceConfigure(ADC0_BASE, 0, ADC_TRIGGER_TIMER, 0);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH2);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 1,
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH1);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 1, ADC_CTL_CH6);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 2, ADC_CTL_CH5);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 3,
                            ADC_CTL_CH4 | ADC_CTL_IE | ADC_CTL_END);
   ADCSequenceEnable(ADC0_BASE, 0);
 
-  GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1);  // Current Sensor
+  // GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1);  // Current Sensor
+  GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_2);  // Current Sensor 1
+  GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_1);  // Current Sensor 2 
+  GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_2);  // Current Sensor 3
+
+
   GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_3);  // Throttle
 
   TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
@@ -345,15 +365,15 @@ int main(void) {
 
 void checkCurrentLimit() {
     // if(DEBUG == 1) {
-        isWithinCurrentBound = true;
-        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
+        // isWithinCurrentBound = true;
+        // GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
     // } else
-  //    if (sensedCurrent > vMax || sensedCurrent < vMin) {
-  //    isWithinCurrentBound = false;
-  //    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
+    //  if (sensedCurrent > vMax || sensedCurrent < vMin) {
+    //  isWithinCurrentBound = false;
+    //  GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
   //  } else {
-  //   isWithinCurrentBound = true;
-  //   GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
+    isWithinCurrentBound = true;
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
   //  }
   updateGates();
 }
@@ -371,22 +391,53 @@ void updatePWM(float dutyCycle){
 float getCurrentCommand(uint32_t digitalValue){
     if(digitalValue < 685) digitalValue = 685;\
     if(digitalValue > 3370) digitalValue = 3370;
-  return (digitalValue - 685)/ (3370.0 - 685) * 15;
+  return (digitalValue - 685)/ (3370.0 - 685) * 1;
 }
 
 float getSensedCurrentFloat(uint32_t digitalValue){
-   return (digitalValue - 2048.0)/4096.0 * 50.0;
+  float temp = (digitalValue - 2624.0)/77.8;
+  if(temp < 0) temp = 0;
+  return temp;
 }
 
 
+uint32_t getMax(uint32_t value1,uint32_t value2,uint32_t value3){
+  uint32_t temp;
+  if(value1 > value2){
+    temp = value1;
+  } else {
+    temp = value2;
+  }
+
+  if(value3 > temp) {
+    temp = value3;
+  }
+
+  return temp;
+}
 
 void ADC0IntHandler(void) {
+  uint32_t total = 0;
+  uint8_t i = 0;
   ADCIntClear(ADC0_BASE, 0);
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
 
-  sensedCurrent = ui32ADC0Value[0];
-  throttle = ui32ADC0Value[1];
+
+
+  throttle = ui32ADC0Value[3];
   checkCurrentLimit();
+
+  current_10[currentIndex] = getMax(ui32ADC0Value[0],ui32ADC0Value[1],ui32ADC0Value[2]);
+  
+  for(i = 0; i<10;i++){
+    total += current_10[i];
+  }
+  sensedCurrent = total/10;
+
+  currentIndex++;
+  if(currentIndex > 9) {
+    currentIndex = 0;
+  }
 
   if(speedSensorCount++ > SPEED_SENSOR_DELAY) {
   speedSensorCount = 0;
@@ -394,17 +445,17 @@ void ADC0IntHandler(void) {
   hallCount = 0;
   }
 
-  // sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
- sensedCurrentFloat = 1.0;
+  sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+//  sensedCurrentFloat = 1.0;
   // speedCommand = getSpeedCommand(throttle);
  currentCommand = getCurrentCommand(throttle);
   // currentCommand = 2.0;
 
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
-
-  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
-  k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
+dutyCycle = sat_dual(currentCommand,0.95, 0.05);
+  // dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
+  // k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
   updatePWM(dutyCycle);
 
 }
