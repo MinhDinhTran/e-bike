@@ -26,7 +26,7 @@
 #define TICK_PER_REV 138
 #define SPEED_SENSOR_DELAY 1000
 
-#define RADIUS .6604
+#define RADIUS .3302
 
 #define AH_TAG 0
 #define AL_TAG 1
