@@ -392,8 +392,8 @@ float getCurrentCommand(uint32_t digitalValue){
 }
 
 float getSensedCurrentFloat(uint32_t digitalValue){
-  float temp = (digitalValue - 2624.0)/77.8;
-  if(temp < 0.5) temp = 0.5;
+  float temp = (digitalValue - 2100.0)/70.8;
+  if(temp < 0.2) temp = 0.2;
   return temp;
 }
 
@@ -450,9 +450,9 @@ void ADC0IntHandler(void) {
 
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
-dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
-  // dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
-  // k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
+// dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
+  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
+  k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
   updatePWM(dutyCycle);
 
 }
