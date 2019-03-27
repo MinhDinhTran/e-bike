@@ -43,8 +43,8 @@ uint32_t ui32ADC0Value[4];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 
-const float iM = 25/2048;  // (actual current) = m(sensed value) + b
-const float iB = -25;   // 2.5 / 5 * 4096
+const float is_Offset = 2014.0;  // 
+const float is_Slope = -73.5;   
 
 const uint32_t pwmBias = 500;
 const uint32_t pwmMIN = 50;
@@ -361,10 +361,6 @@ int main(void) {
 }
 
 void checkCurrentLimit() {
-    // if(DEBUG == 1) {
-        // isWithinCurrentBound = true;
-        // GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);
-    // } else
      if (sensedCurrent > vMax || sensedCurrent < vMin) {
      isWithinCurrentBound = false;
      GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
@@ -392,9 +388,7 @@ float getCurrentCommand(uint32_t digitalValue){
 }
 
 float getSensedCurrentFloat(uint32_t digitalValue){
-  float temp = (digitalValue - 2100.0)/70.8;
-  if(temp < 0.2) temp = 0.2;
-  return temp;
+  return  (digitalValue - is_Offset)/is_Slope;
 }
 
 
@@ -450,9 +444,8 @@ void ADC0IntHandler(void) {
 
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
-// dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
-  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, 
-  k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
+  dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
+  // dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
   updatePWM(dutyCycle);
 
 }
