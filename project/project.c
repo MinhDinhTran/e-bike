@@ -43,16 +43,20 @@ uint32_t ui32ADC0Value[4];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 
-const float is_Offset = 2014.0;  // 
-const float is_Slope = -73.5;   
+const float is_Offset = 2080.0;  // 
+const float is_Slope = 73.5;   
+
+const uint32_t thrMIN = 640;
+const uint32_t thrMAX = 3360;
+const float cur_cmd_MAX = 10.0;
 
 const uint32_t pwmBias = 500;
 const uint32_t pwmMIN = 50;
 const uint32_t pwmMAX = 950;
-volatile uint32_t ui8Adjust;
+volatile uint32_t pwmCurr = 50;
 // Current control variables
-const float k_id = 27.1378/4;  // I gain i-d
-const float k_pd = 0.0118/2;   // P gain i-d
+const float k_id = 0.1;//27.1378;  // I gain i-d
+const float k_pd = 0.02;    // P gain i-d
 volatile float id_int = 0;
 volatile float id_dif = 0;
 volatile float id_err = 0;
@@ -162,12 +166,12 @@ void pwmControl(uint32_t gateH, uint32_t gateH_other, uint32_t gateL,
 }
 
 void setPulseWidth() {
-  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4, ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_5, ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_6, ui8Adjust * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui8Adjust * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, pwmCurr * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, pwmCurr * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4, pwmCurr * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_5, pwmCurr * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_6, pwmCurr * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, pwmCurr * ui32Load / 1000);
 }
 
 void turnOffPwm() {
@@ -230,7 +234,7 @@ void updateGates() {
 
 void configureBoard() {
   uint32_t ui32Period;
-  ui8Adjust = pwmMIN;
+  pwmCurr = pwmMIN;
 
   ROM_FPULazyStackingEnable();
   ROM_FPUEnable();
@@ -262,6 +266,7 @@ void configureBoard() {
   GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1);  // LEDS
   GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_2);  // LEDS
   GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_3);  // LEDS
+  GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_6);  // Motor enable
 
   GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
   // Configure PWM
@@ -372,19 +377,19 @@ void checkCurrentLimit() {
 }
 
 void updatePWM(float dutyCycle){
-  ui8Adjust = dutyCycle * 1000;
-  if (ui8Adjust < pwmMIN) {
-    ui8Adjust = pwmMIN;
-  } else if (ui8Adjust > pwmMAX) {
-    ui8Adjust = pwmMAX;
+  pwmCurr = dutyCycle * 1000;
+  if (pwmCurr < pwmMIN) {
+    pwmCurr = pwmMIN;
+  } else if (pwmCurr > pwmMAX) {
+    pwmCurr = pwmMAX;
   }
   setPulseWidth();
 }
 
 float getCurrentCommand(uint32_t digitalValue){
-    if(digitalValue < 685) digitalValue = 685;\
-    if(digitalValue > 3370) digitalValue = 3370;
-  return (digitalValue - 685)/ (3370.0 - 685) * 10;
+    if(digitalValue < thrMIN) digitalValue = thrMIN;\
+    if(digitalValue > thrMAX) digitalValue = thrMAX;
+  return (digitalValue - thrMIN)*1.0/ (thrMAX - thrMIN) * cur_cmd_MAX;
 }
 
 float getSensedCurrentFloat(uint32_t digitalValue){
@@ -444,8 +449,11 @@ void ADC0IntHandler(void) {
 
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
-  dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
-  // dutyCycle = pidloop(currentCommand, sensedCurrentFloat, false, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
+  // dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
+  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
+  if(currentCommand <= 0.01) id_int = 0.0;
+  
+  dutyCycle = 0.3;
   updatePWM(dutyCycle);
 
 }
@@ -461,6 +469,12 @@ void GPIOBIntHandler(void) {
   GPIOIntClear(GPIO_PORTB_BASE, GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
   switch2 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_3) & GPIO_PIN_3;
   switch1 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_2) & GPIO_PIN_2;
+
+  if(switch1) {
+    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
+  } else {
+    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, 0);
+  }
   updateGates();
 }
 
