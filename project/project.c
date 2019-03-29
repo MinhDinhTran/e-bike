@@ -24,7 +24,7 @@
 #define DEBUG 1
 #define PI 3.14159
 #define TICK_PER_REV 138
-#define SPEED_SENSOR_DELAY 1000
+#define SPEED_SENSOR_DELAY 4000
 
 #define RADIUS .3302
 
@@ -44,11 +44,14 @@ const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 
 const float is_Offset = 2080.0;  // 
-const float is_Slope = 73.5;   
+const float is_Slope = 200.0;   
 
 const uint32_t thrMIN = 640;
 const uint32_t thrMAX = 3360;
-const float cur_cmd_MAX = 10.0;
+const float cur_cmd_MAX = 10.0; // (A)
+
+const float speed_cmd_MAX = 5.0; // (m/s)
+
 
 const uint32_t pwmBias = 500;
 const uint32_t pwmMIN = 20;
@@ -70,6 +73,8 @@ volatile float s_err = 0;
 volatile float sensedCurrentFloat = 0;
 volatile float sensedSpeed = 0;
 volatile float speedCommand = 0;
+volatile float speed_10[10];
+volatile uint32_t speedIndex = 0;
 
 volatile uint32_t speedSensorCount = 0;
 
@@ -92,10 +97,13 @@ volatile bool b;
 volatile bool c;
 
 volatile uint32_t hallCount = 0;
+volatile uint32_t maxCount = 0;
 
 volatile bool switch1 = true;
 volatile bool switch2 = true;
 volatile bool isWithinCurrentBound = true;
+
+volatile bool hallIsCounting = true;
 
 int setAbc(bool a, bool b, bool c) {
   int abc = 0;
@@ -185,11 +193,19 @@ void turnOffPwm() {
 }
 
 void updateGates() {
+  int newABC = 0;
   a = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_4) & GPIO_PIN_4;
   b = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3) & GPIO_PIN_3;
   c = GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) & GPIO_PIN_2;
+  newABC = setAbc(a, b, c);
+  if(hallIsCounting){
+    if(newABC != abc) hallCount++;
+  } else {
+    hallCount = 0;
+    hallIsCounting = true;
+  }
 
-  abc = setAbc(a, b, c);
+  abc = newABC;
       // abc = 6;
       // switch1 = true;
       // isWithinCurrentBound = true;
@@ -390,6 +406,12 @@ float getCurrentCommand(uint32_t digitalValue){
   return (digitalValue - thrMIN)*1.0/ (thrMAX - thrMIN) * cur_cmd_MAX;
 }
 
+float getSpeedCommand(uint32_t digitalValue){
+    if(digitalValue < thrMIN) digitalValue = thrMIN;\
+    if(digitalValue > thrMAX) digitalValue = thrMAX;
+  return (digitalValue - thrMIN)*1.0/ (thrMAX - thrMIN) * speed_cmd_MAX;
+}
+
 float getSensedCurrentFloat(uint32_t digitalValue){
   return  (digitalValue - is_Offset)/is_Slope;
 }
@@ -412,6 +434,8 @@ uint32_t getMax(uint32_t value1,uint32_t value2,uint32_t value3){
 
 void ADC0IntHandler(void) {
   uint32_t total = 0;
+  float speedTotal = 0;
+
   uint8_t i = 0;
   ADCIntClear(ADC0_BASE, 0);
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
@@ -424,31 +448,40 @@ void ADC0IntHandler(void) {
   }
   sensedCurrent = total/10;
 
-  // checkCurrentLimit();
-
   currentIndex++;
   if(currentIndex > 9) {
     currentIndex = 0;
   }
 
   if(speedSensorCount++ > SPEED_SENSOR_DELAY) {
-  speedSensorCount = 0;
-  sensedSpeed = 2*PI*hallCount*RADIUS*TIMER_FREQUENCY/(TICK_PER_REV*SPEED_SENSOR_DELAY);
-  hallCount = 0;
+    speedSensorCount = 0;    
+    // speed_10[speedIndex] =  2.0*PI*hallCount*RADIUS*TIMER_FREQUENCY/(1.0*TICK_PER_REV*SPEED_SENSOR_DELAY);
+    // for(i = 0; i<10;i++){
+    //   speedTotal += speed_10[i];
+    // }
+
+    sensedSpeed = 2.0*PI*hallCount*RADIUS*TIMER_FREQUENCY/(1.0*TICK_PER_REV*SPEED_SENSOR_DELAY);
+    maxCount = hallCount;
+    hallIsCounting = false;
+
+    // sensedSpeed = speedTotal/10;
+    // speedIndex++;
+    // if(speedIndex > 9) {
+    //   speedIndex = 0;
+    // }
   }
 
   sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
-//  sensedCurrentFloat = 1.0;
-  // speedCommand = getSpeedCommand(throttle);
- currentCommand = getCurrentCommand(throttle);
+  //  sensedCurrentFloat = 1.0;
+  speedCommand = getSpeedCommand(throttle);
+  currentCommand = getCurrentCommand(throttle);
   // currentCommand = 2.0;
 
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
-  // dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
-  // dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
+  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
   if(currentCommand <= 0.01) id_int = 0.0;
-  dutyCycle = currentCommand / 10;
+  // dutyCycle = currentCommand / 10;
   if(dutyCycle < .02) dutyCycle = .02;
   if(dutyCycle > .98) dutyCycle = .98;
   updatePWM(dutyCycle);
@@ -457,7 +490,6 @@ void ADC0IntHandler(void) {
 void GPIOIntHandler(void) {
   GPIOIntClear(GPIO_PORTA_BASE,
                GPIO_INT_PIN_4 | GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
-  hallCount++;
   updateGates();
 }
 
