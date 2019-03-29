@@ -19,8 +19,8 @@
 #include "pid.h"
 #include "project.h"
 
-#define PWM_FREQUENCY 50000
-#define TIMER_FREQUENCY 2000
+#define PWM_FREQUENCY 40000
+#define TIMER_FREQUENCY 6000
 #define DEBUG 1
 #define PI 3.14159
 #define TICK_PER_REV 138
@@ -51,8 +51,8 @@ const uint32_t thrMAX = 3360;
 const float cur_cmd_MAX = 10.0;
 
 const uint32_t pwmBias = 500;
-const uint32_t pwmMIN = 50;
-const uint32_t pwmMAX = 950;
+const uint32_t pwmMIN = 20;
+const uint32_t pwmMAX = 980;
 volatile uint32_t pwmCurr = 50;
 // Current control variables
 const float k_id = 0.1;//27.1378;  // I gain i-d
@@ -143,8 +143,6 @@ void pwmControl(uint32_t gateH, uint32_t gateH_other, uint32_t gateL,
   uint32_t pinL_O = getOutBit(gateOff1);
   uint32_t pinO = getOutBit(gateOff2);
   uint32_t pinO_O = getOutBit(gateOff3);
-
-  setPulseWidth();
 
   //  Enable duty cycle for top gate
   ROM_PWMOutputInvert(gateHBase, pinH, true);
@@ -241,7 +239,7 @@ void configureBoard() {
 
   SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
                  SYSCTL_OSC_MAIN);
-  ROM_SysCtlPWMClockSet(SYSCTL_PWMDIV_2);
+  ROM_SysCtlPWMClockSet(SYSCTL_PWMDIV_1);
 
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
@@ -284,7 +282,7 @@ void configureBoard() {
   ROM_GPIOPinConfigure(GPIO_PE4_M0PWM4);
   ROM_GPIOPinConfigure(GPIO_PE5_M0PWM5);
 
-  ui32PWMClock = SysCtlClockGet() / 2;
+  ui32PWMClock = SysCtlClockGet();
   ui32Load = (ui32PWMClock / PWM_FREQUENCY) - 1;
 
   PWMGenConfigure(PWM1_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN);
@@ -366,8 +364,8 @@ int main(void) {
 }
 
 void checkCurrentLimit() {
-     if (sensedCurrent > vMax || sensedCurrent < vMin) {
-     isWithinCurrentBound = false;
+  if (sensedCurrent > vMax || sensedCurrent < vMin) {
+     isWithinCurrentBound = true;
      GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1);
    } else {
     isWithinCurrentBound = true;
@@ -417,11 +415,7 @@ void ADC0IntHandler(void) {
   uint8_t i = 0;
   ADCIntClear(ADC0_BASE, 0);
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
-
-
-
   throttle = ui32ADC0Value[3];
-  checkCurrentLimit();
 
   current_10[currentIndex] = getMax(ui32ADC0Value[0],ui32ADC0Value[1],ui32ADC0Value[2]);
   
@@ -429,6 +423,8 @@ void ADC0IntHandler(void) {
     total += current_10[i];
   }
   sensedCurrent = total/10;
+
+  // checkCurrentLimit();
 
   currentIndex++;
   if(currentIndex > 9) {
@@ -450,12 +446,12 @@ void ADC0IntHandler(void) {
   // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
   // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
   // dutyCycle = sat_dual(currentCommand/10.0,0.95, 0.05);
-  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
+  // dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
   if(currentCommand <= 0.01) id_int = 0.0;
-  
-  dutyCycle = 0.3;
+  dutyCycle = currentCommand / 10;
+  if(dutyCycle < .02) dutyCycle = .02;
+  if(dutyCycle > .98) dutyCycle = .98;
   updatePWM(dutyCycle);
-
 }
 
 void GPIOIntHandler(void) {
