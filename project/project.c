@@ -46,8 +46,8 @@ const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 const float is_Offset = 2080.0;  // 
 const float is_Slope = 200.0;   
 
-const uint32_t thrMIN = 640;
-const uint32_t thrMAX = 3360;
+const uint32_t thrMIN = 660;
+const uint32_t thrMAX = 3480;
 const float cur_cmd_MAX = 10.0; // (A)
 
 const float speed_cmd_MAX = 5.0; // (m/s)
@@ -64,8 +64,8 @@ volatile float id_int = 0;
 volatile float id_dif = 0;
 volatile float id_err = 0;
 // Speed control variables
-const float k_is = 96331;  // I gain speed
-const float k_ps = 3679.6;   // P gain speed
+const float k_is = 0.9;  // I gain speed
+const float k_ps = 1.5;   // P gain speed
 volatile float s_int = 0;
 volatile float s_dif = 0;
 volatile float s_err = 0;
@@ -73,11 +73,8 @@ volatile float s_err = 0;
 volatile float sensedCurrentFloat = 0;
 volatile float sensedSpeed = 0;
 volatile float speedCommand = 0;
-volatile float speed_10[10];
-volatile uint32_t speedIndex = 0;
 
 volatile uint32_t speedSensorCount = 0;
-
 
 volatile float currentCommand = 0;
 volatile float dutyCycle = 0;
@@ -455,35 +452,17 @@ void ADC0IntHandler(void) {
 
   if(speedSensorCount++ > SPEED_SENSOR_DELAY) {
     speedSensorCount = 0;    
-    // speed_10[speedIndex] =  2.0*PI*hallCount*RADIUS*TIMER_FREQUENCY/(1.0*TICK_PER_REV*SPEED_SENSOR_DELAY);
-    // for(i = 0; i<10;i++){
-    //   speedTotal += speed_10[i];
-    // }
-
     sensedSpeed = 2.0*PI*hallCount*RADIUS*TIMER_FREQUENCY/(1.0*TICK_PER_REV*SPEED_SENSOR_DELAY);
     maxCount = hallCount;
     hallIsCounting = false;
-
-    // sensedSpeed = speedTotal/10;
-    // speedIndex++;
-    // if(speedIndex > 9) {
-    //   speedIndex = 0;
-    // }
   }
 
   sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
-  //  sensedCurrentFloat = 1.0;
   speedCommand = getSpeedCommand(throttle);
-  currentCommand = getCurrentCommand(throttle);
-  // currentCommand = 2.0;
-
-  // currentCommand = pidloop(speedCommand, sensedSpeed, false, 
-  // k_ps, k_is, 0.0, 10, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
+  currentCommand = pidloop(speedCommand, sensedSpeed, false, k_ps, k_is, 0.0, cur_cmd_MAX, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
   dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
-  if(currentCommand <= 0.01) id_int = 0.0;
-  // dutyCycle = currentCommand / 10;
-  if(dutyCycle < .02) dutyCycle = .02;
-  if(dutyCycle > .98) dutyCycle = .98;
+  if(currentCommand <= 0.01 && s_int>0) id_int  *= .99;
+  if(speedCommand <= 0.01 && s_int>0) s_int *= .99;
   updatePWM(dutyCycle);
 }
 
