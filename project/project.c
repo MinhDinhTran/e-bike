@@ -45,7 +45,7 @@
 void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
 
-uint32_t ui32ADC0Value[4];
+uint32_t ui32ADC0Value[7];
 const uint32_t vMax = 3625;  // 4.5 / 5 * 4096
 const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 
@@ -89,6 +89,10 @@ volatile float dutyCycle = 0;
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
 volatile uint32_t throttle;
+
+volatile uint32_t battery_voltage;
+volatile uint32_t boost_voltage;
+volatile uint32_t battery_current;
 
 volatile uint32_t current_10[10];
 volatile uint32_t currentIndex = 0;
@@ -331,14 +335,16 @@ void configureBoard() {
   ADCHardwareOversampleConfigure(ADC0_BASE, 4);
   ADCReferenceSet(ADC0_BASE, ADC_REF_INT);
 
-// 1 6 5
+  // 1 6 5
 
   ADCSequenceConfigure(ADC0_BASE, 0, ADC_TRIGGER_TIMER, 0);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH1);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 1, ADC_CTL_CH6);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 2, ADC_CTL_CH5);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 3,
-                           ADC_CTL_CH4 | ADC_CTL_IE | ADC_CTL_END);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 3, ADC_CTL_CH4);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 4, ADC_CTL_CH3);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 5, ADC_CTL_CH7);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 6, ADC_CTL_CH6 | ADC_CTL_IE | ADC_CTL_END);
   ADCSequenceEnable(ADC0_BASE, 0);
 
   // GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1);  // Current Sensor
@@ -347,6 +353,10 @@ void configureBoard() {
   GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_2);  // Current Sensor 3
 
   GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_3);  // Throttle
+
+  GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_0);  // Boost Current
+  GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_0);  // Boost Voltage
+  GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_1);  // Battery Voltage
 
   TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
   ui32Period = (SysCtlClockGet()  / TIMER_FREQUENCY) - 1;
@@ -451,8 +461,12 @@ void ADC0IntHandler(void) {
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
   throttle = ui32ADC0Value[3];
 
+  battery_current = ui32ADC0Value[4];
+  battery_voltage = ui32ADC0Value[6];
+  boost_voltage = ui32ADC0Value[5];
+
   current_10[currentIndex] = getMax(ui32ADC0Value[0],ui32ADC0Value[1],ui32ADC0Value[2]);
-  
+
   for(i = 0; i<10;i++){
     total += current_10[i];
   }
