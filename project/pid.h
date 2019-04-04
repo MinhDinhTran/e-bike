@@ -4,7 +4,7 @@
 #define __PID_H__
 
 float pidloop(float y_c, float y, bool reset, float kp, float ki,
-              float lowerLimit, float upperLimit, float Ts, float *integrator,
+              float lowerLimit, float upperLimit, float *integrator,
               float *error_d1);
 
 float sat_dual(float in, float upperLimit, float lowerLimit);

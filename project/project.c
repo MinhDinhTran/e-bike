@@ -35,6 +35,12 @@
 #define CH_TAG 4
 #define CL_TAG 5
 
+#define k_id 0.1 //27.1378;  // I gain i-d
+#define k_pd 0.02    // P gain i-d
+
+#define k_is 0.45  // I gain speed
+#define k_ps 0.7   // P gain speed
+
 #ifdef DEBUG
 void __error__(char *pcFilename, uint32_t ui32Line) {}
 #endif
@@ -58,16 +64,17 @@ const uint32_t pwmMIN = 20;
 const uint32_t pwmMAX = 980;
 volatile uint32_t pwmCurr = 50;
 // Current control variables
-const float k_id = 0.1;//27.1378;  // I gain i-d
-const float k_pd = 0.02;    // P gain i-d
+float p_i_d_pos = k_pd + k_id/(2*TIMER_FREQUENCY);
+float p_i_d_neg = - k_pd + k_id/(2*TIMER_FREQUENCY);
+
 volatile float id_int = 0;
-volatile float id_dif = 0;
 volatile float id_err = 0;
 // Speed control variables
-const float k_is = 0.9;  // I gain speed
-const float k_ps = 1.5;   // P gain speed
+
+float p_i_i_pos = k_ps + k_is/(2*TIMER_FREQUENCY);
+float p_i_i_neg = - k_ps + k_is/(2*TIMER_FREQUENCY);
+
 volatile float s_int = 0;
-volatile float s_dif = 0;
 volatile float s_err = 0;
 
 volatile float sensedCurrentFloat = 0;
@@ -409,6 +416,12 @@ float getSpeedCommand(uint32_t digitalValue){
   return (digitalValue - thrMIN)*1.0/ (thrMAX - thrMIN) * speed_cmd_MAX;
 }
 
+float getDutyCycleCommand(uint32_t digitalValue){
+    if(digitalValue < thrMIN) digitalValue = thrMIN;\
+    if(digitalValue > thrMAX) digitalValue = thrMAX;
+  return (digitalValue - thrMIN)*1.0/ (thrMAX - thrMIN);
+}
+
 float getSensedCurrentFloat(uint32_t digitalValue){
   return  (digitalValue - is_Offset)/is_Slope;
 }
@@ -458,11 +471,16 @@ void ADC0IntHandler(void) {
   }
 
   sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+  // dutyCycle = getDutyCycleCommand(throttle);
+  // dutyCycle = sat_dual(dutyCycle,0.95,0.05);
+
   speedCommand = getSpeedCommand(throttle);
-  currentCommand = pidloop(speedCommand, sensedSpeed, false, k_ps, k_is, 0.0, cur_cmd_MAX, 1.0/TIMER_FREQUENCY, &s_int, &s_err);
-  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, k_pd, k_id, 0.05, 0.95, 1.0/TIMER_FREQUENCY, &id_int, &id_err);
-  if(currentCommand <= 0.01 && s_int>0) id_int  *= .99;
-  if(speedCommand <= 0.01 && s_int>0) s_int *= .99;
+  // currentCommand = getCurrentCommand(throttle);
+
+  currentCommand = pidloop(speedCommand, sensedSpeed, false,
+   p_i_i_pos, p_i_i_neg, 0.0, cur_cmd_MAX, &s_int, &s_err);
+  dutyCycle = pidloop(currentCommand, sensedCurrentFloat, !switch1, 
+  p_i_d_pos, p_i_d_neg, 0.05, 0.95, &id_int, &id_err);
   updatePWM(dutyCycle);
 }
 
