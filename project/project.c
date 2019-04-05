@@ -183,7 +183,7 @@ void pwmControl(uint32_t gateH, uint32_t gateH_other, uint32_t gateL,
   // Boost converter
   ROM_PWMOutputInvert(PWM0_BASE, PWM_OUT_2_BIT, true);
   ROM_PWMOutputState(PWM0_BASE, PWM_OUT_2_BIT, true);
-  ROM_PWMOutputInvert(PWM0_BASE, PWM_OUT_3_BIT, false);
+  ROM_PWMOutputInvert(PWM0_BASE, PWM_OUT_3_BIT, true);
   ROM_PWMOutputState(PWM0_BASE, PWM_OUT_3_BIT, true);
 }
 
