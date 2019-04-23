@@ -55,6 +55,9 @@ const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 const float is_Offset = 2080.0;  //
 const float is_Slope = 200.0;
 
+const float bis_Offset = 1977.0;  //
+const float bis_Slope = 31.3;
+
 const uint32_t thrMIN = 660;
 const uint32_t thrMAX = 3480;
 const float cur_cmd_MAX = 10.0;  // (A)
@@ -91,6 +94,7 @@ float pi_b_neg = -k_pb + k_ib / (2 * TIMER_FREQUENCY);
 volatile float b_int = 0;
 volatile float b_err = 0;
 
+volatile float sensedBatteryCurrentFloat = 0;
 volatile float sensedCurrentFloat = 0;
 volatile float sensedSpeed = 0;
 volatile float speedCommand = 0;
@@ -109,6 +113,7 @@ volatile uint32_t battery_voltage;
 volatile uint32_t boost_voltage;
 volatile uint32_t battery_current;
 
+volatile uint32_t boost_current_10[10];
 volatile uint32_t current_10[10];
 volatile uint32_t currentIndex = 0;
 
@@ -473,6 +478,11 @@ float getSensedCurrentFloat(uint32_t digitalValue) {
   return (digitalValue - is_Offset) / is_Slope;
 }
 
+float getSensedBatteryCurrentFloat(uint32_t digitalValue) {
+  return (digitalValue - bis_Offset) / bis_Slope;
+}
+
+
 uint32_t getMax(uint32_t value1, uint32_t value2, uint32_t value3) {
   uint32_t temp;
   if (value1 > value2) {
@@ -490,6 +500,7 @@ uint32_t getMax(uint32_t value1, uint32_t value2, uint32_t value3) {
 
 void ADC0IntHandler(void) {
   uint32_t total = 0;
+  uint32_t boost_total = 0;
   float speedTotal = 0;
 
   uint8_t i = 0;
@@ -497,16 +508,18 @@ void ADC0IntHandler(void) {
   ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
   throttle = ui32ADC0Value[3];
 
-  battery_current = ui32ADC0Value[4];
   battery_voltage = ui32ADC0Value[6];
   boost_voltage = ui32ADC0Value[5];
 
   current_10[currentIndex] = getMax(ui32ADC0Value[0],ui32ADC0Value[1],ui32ADC0Value[2]);
+  boost_current_10[currentIndex] = ui32ADC0Value[4];
 
   for(i = 0; i<10;i++){
     total += current_10[i];
+    boost_total += boost_current_10[i];
   }
   sensedCurrent = total / 10;
+  battery_current = boost_total / 10;
 
   currentIndex++;
   if (currentIndex > 9) {
@@ -522,6 +535,7 @@ void ADC0IntHandler(void) {
   }
 
   sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
+  sensedBatteryCurrentFloat = getSensedBatteryCurrentFloat(battery_current);
 
   speedCommand = getSpeedCommand(throttle);
 
