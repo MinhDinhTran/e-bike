@@ -41,8 +41,8 @@
 #define k_is 0.45  // I gain speed
 #define k_ps 0.7   // P gain speed
 
-#define k_ib 0.45  // I gain boost
-#define k_pb 0.7   // P gain boost
+#define k_ib 2.0  // I gain boost
+#define k_pb 0.03   // P gain boost
 
 #ifdef DEBUG
 void __error__(char *pcFilename, uint32_t ui32Line) {}
@@ -55,14 +55,14 @@ const uint32_t vMin = 200;   // 0.5 / 5 * 4096
 const float is_Offset = 2080.0;  //
 const float is_Slope = 200.0;
 
-const float bis_Offset = 1977.0;  //
-const float bis_Slope = 31.3;
+const float bis_Offset = 3132.0;  //
+const float bis_Slope = 50.3;
 
 const uint32_t thrMIN = 660;
 const uint32_t thrMAX = 3480;
 const float cur_cmd_MAX = 10.0;  // (A)
 
-const float speed_cmd_MAX = 5.0;  // (m/s)
+const float speed_cmd_MAX = 8.9408;  // (m/s)
 
 const uint32_t pwmBias = 500;
 const uint32_t pwmMIN = 20;
@@ -102,8 +102,8 @@ volatile float speedCommand = 0;
 volatile uint32_t speedSensorCount = 0;
 
 volatile float currentCommand = 0;
-volatile float inverterDuty = 0;
-volatile float boostDuty = 0;
+volatile float inverterDuty = 0.05;
+volatile float boostDuty = 0.05;
 
 volatile uint32_t ui32Load;
 volatile uint32_t ui32PWMClock;
@@ -441,6 +441,15 @@ void checkCurrentLimit() {
   updateGates();
 }
 
+float saturatef(float value, float max, float min) {
+  if (value < min) {
+    value = min;
+  } else if (value > max) {
+    value = max;
+  }
+  return value;
+}
+
 uint32_t saturate(uint32_t value, uint32_t max, uint32_t min) {
   if (value < min) {
     value = min;
@@ -537,28 +546,42 @@ void ADC0IntHandler(void) {
   sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
   sensedBatteryCurrentFloat = getSensedBatteryCurrentFloat(battery_current);
 
+  // if(sensedBatteryCurrentFloat > 10) {
+  //   mode = 2;
+  // }
+
   speedCommand = getSpeedCommand(throttle);
 
-  if (mode == 0 && pwmCurr >= pwmMAX) {
+  if (mode == 0 && pwmCurr >= 950U) {
     mode = 1;
-  } else if(mode == 1 && pwmBoost <= pwmMIN) {
+  } else if(mode == 1 && pwmBoost <= 50U) {
     mode = 0;
   }
 
+  // mode = 1;
+
+
   currentCommand = pidloop(speedCommand, sensedSpeed, false, p_i_i_pos,
                            p_i_i_neg, 0.0, cur_cmd_MAX, &s_int, &s_err);
+  // currentCommand = getCurrentCommand(throttle);
 
   if(mode == 1) {
     inverterDuty = 0.95;
-
+    // boostDuty = saturatef( getDutyCycleCommand(throttle) - 0.15,0.2,0.05);
     boostDuty = pidloop(currentCommand, sensedCurrentFloat, !switch1,
-                         pi_b_pos, pi_b_neg, 0.05, 0.95, &b_int, &b_err);
-  } else {
+                         pi_b_pos, pi_b_neg, 0.05, 0.4, &b_int, &b_err);
+  } else if (mode == 0) {
     inverterDuty = pidloop(currentCommand, sensedCurrentFloat, !switch1,
                          p_i_d_pos, p_i_d_neg, 0.05, 0.95, &id_int, &id_err);
-                         
+    // inverterDuty = getDutyCycleCommand(throttle);
+    // inverterDuty = saturatef( getDutyCycleCommand(throttle),0.2,0.05);
     boostDuty = 0.05;
+  } else {
+    inverterDuty = saturatef(inverterDuty*0.99 + 0.05,inverterDuty*0.99,0.05);
+    boostDuty = saturatef(boostDuty*0.99 + 0.05,boostDuty*0.99,0.05);
   }
+
+
   
   updatePWM(inverterDuty, boostDuty);
 }
@@ -578,7 +601,9 @@ void GPIOBIntHandler(void) {
     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
   } else {
     GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, 0);
+    if (mode == 2) {  mode = 0; }
   }
+
   updateGates();
 }
 
