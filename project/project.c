@@ -290,33 +290,30 @@ void updateGates() {
 void updateStateMachine() {
   switch (mode) {
     case 0:
-      if (!switch1) {
-        mode = 1;
-      }
       break;
     case 1:
       if (switch1) {
-        mode = 2;
-      }
-      break;
-    case 2:
-      if (pwmCurr >= 950U) {
         mode = 3;
       }
       break;
+    case 2:
+      break;
     case 3:
-      if (pwmBoost <= 50U) {
-        mode = 2;
+      if (pwmCurr >= 950U) {
+        mode = 4;
       }
       break;
     case 4:
-      if (!switch1) {
-        mode = 1;
+      if (pwmBoost <= 50U) {
+        mode = 3;
       }
       break;
     default:
       mode = 0;
       break;
+  }
+  if (!switch1) {
+    mode = 1;
   }
 }
 
@@ -559,7 +556,8 @@ void readSensors(int ui32ADC0Value[]) {
   battery_voltage = ui32ADC0Value[6];
   boost_voltage = ui32ADC0Value[5];
 
-  current_10[currentIndex] = getMax(ui32ADC0Value[0], ui32ADC0Value[1], ui32ADC0Value[2]);
+  current_10[currentIndex] =
+      getMax(ui32ADC0Value[0], ui32ADC0Value[1], ui32ADC0Value[2]);
   boost_current_10[currentIndex] = ui32ADC0Value[4];
 
   for (i = 0; i < 10; i++) {
@@ -611,9 +609,11 @@ void control() {
                           pi_b_pos, pi_b_neg, 0.05, 0.4, &b_int, &b_err);
       break;
     default:
-      inverterDuty =
-          saturatef(inverterDuty * 0.99 + 0.05, inverterDuty * 0.99, 0.05);
-      boostDuty = saturatef(boostDuty * 0.99 + 0.05, boostDuty * 0.99, 0.05);
+      id_int = 0;
+      b_int = 0;
+
+      inverterDuty = saturatef(inverterDuty * 0.99, inverterDuty, 0.05);
+      boostDuty = saturatef(boostDuty * 0.99, boostDuty, 0.05);
       break;
   }
 }
