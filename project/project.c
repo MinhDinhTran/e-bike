@@ -41,8 +41,8 @@
 #define k_is 0.45  // I gain speed
 #define k_ps 0.7   // P gain speed
 
-#define k_ib 2.0  // I gain boost
-#define k_pb 0.03   // P gain boost
+#define k_ib 2.0   // I gain boost
+#define k_pb 0.03  // P gain boost
 
 #ifdef DEBUG
 void __error__(char *pcFilename, uint32_t ui32Line) {}
@@ -71,7 +71,12 @@ volatile uint32_t pwmCurr = 50;
 
 volatile uint32_t pwmBoost = 50;
 
-// Control mode
+// Control Mode
+// 0 Initial State
+// 1 Off State
+// 2 Error State
+// 3 Inverter Mode
+// 4 Boost Mode
 volatile uint8_t mode = 0;
 
 // Current control variables
@@ -282,6 +287,39 @@ void updateGates() {
   }
 }
 
+void updateStateMachine() {
+  switch (mode) {
+    case 0:
+      if (!switch1) {
+        mode = 1;
+      }
+      break;
+    case 1:
+      if (switch1) {
+        mode = 2;
+      }
+      break;
+    case 2:
+      if (pwmCurr >= 950U) {
+        mode = 3;
+      }
+      break;
+    case 3:
+      if (pwmBoost <= 50U) {
+        mode = 2;
+      }
+      break;
+    case 4:
+      if (!switch1) {
+        mode = 1;
+      }
+      break;
+    default:
+      mode = 0;
+      break;
+  }
+}
+
 void configureBoard() {
   uint32_t ui32Period;
   pwmCurr = pwmMIN;
@@ -354,14 +392,16 @@ void configureBoard() {
 
   ROM_PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6 | PWM_OUT_7,
                        pwmMIN * ui32Load / 1000);
-  ROM_PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2 | PWM_OUT_3 | PWM_OUT_5 | PWM_OUT_4 | PWM_OUT_6 | PWM_OUT_7,
-                       pwmMIN * ui32Load / 1000);
+  ROM_PWMPulseWidthSet(
+      PWM0_BASE,
+      PWM_OUT_2 | PWM_OUT_3 | PWM_OUT_5 | PWM_OUT_4 | PWM_OUT_6 | PWM_OUT_7,
+      pwmMIN * ui32Load / 1000);
 
   ROM_PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
-  ROM_PWMOutputState(
-      PWM0_BASE, PWM_OUT_2_BIT | PWM_OUT_3_BIT| PWM_OUT_5_BIT |
-       PWM_OUT_4_BIT| PWM_OUT_6_BIT | PWM_OUT_7_BIT,
-      true);
+  ROM_PWMOutputState(PWM0_BASE,
+                     PWM_OUT_2_BIT | PWM_OUT_3_BIT | PWM_OUT_5_BIT |
+                         PWM_OUT_4_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT,
+                     true);
 
   ROM_PWMGenEnable(PWM1_BASE, PWM_GEN_3);
   ROM_PWMGenEnable(PWM0_BASE, PWM_GEN_1);
@@ -381,7 +421,8 @@ void configureBoard() {
   ADCSequenceStepConfigure(ADC0_BASE, 0, 3, ADC_CTL_CH4);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 4, ADC_CTL_CH3);
   ADCSequenceStepConfigure(ADC0_BASE, 0, 5, ADC_CTL_CH7);
-  ADCSequenceStepConfigure(ADC0_BASE, 0, 6, ADC_CTL_CH6 | ADC_CTL_IE | ADC_CTL_END);
+  ADCSequenceStepConfigure(ADC0_BASE, 0, 6,
+                           ADC_CTL_CH6 | ADC_CTL_IE | ADC_CTL_END);
   ADCSequenceEnable(ADC0_BASE, 0);
 
   // GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1);  // Current Sensor
@@ -460,8 +501,8 @@ uint32_t saturate(uint32_t value, uint32_t max, uint32_t min) {
 }
 
 void updatePWM(float id, float bd) {
-  pwmCurr = saturate(id * 1000,pwmMAX,pwmMIN);
-  pwmBoost = saturate(bd * 1000,pwmMAX,pwmMIN);
+  pwmCurr = saturate(id * 1000, pwmMAX, pwmMIN);
+  pwmBoost = saturate(bd * 1000, pwmMAX, pwmMIN);
   setPulseWidth();
 }
 
@@ -491,7 +532,6 @@ float getSensedBatteryCurrentFloat(uint32_t digitalValue) {
   return (digitalValue - bis_Offset) / bis_Slope;
 }
 
-
 uint32_t getMax(uint32_t value1, uint32_t value2, uint32_t value3) {
   uint32_t temp;
   if (value1 > value2) {
@@ -507,23 +547,22 @@ uint32_t getMax(uint32_t value1, uint32_t value2, uint32_t value3) {
   return temp;
 }
 
-void ADC0IntHandler(void) {
+void readSensors(int ui32ADC0Value[]) {
   uint32_t total = 0;
   uint32_t boost_total = 0;
   float speedTotal = 0;
 
   uint8_t i = 0;
-  ADCIntClear(ADC0_BASE, 0);
-  ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
+
   throttle = ui32ADC0Value[3];
 
   battery_voltage = ui32ADC0Value[6];
   boost_voltage = ui32ADC0Value[5];
 
-  current_10[currentIndex] = getMax(ui32ADC0Value[0],ui32ADC0Value[1],ui32ADC0Value[2]);
+  current_10[currentIndex] = getMax(ui32ADC0Value[0], ui32ADC0Value[1], ui32ADC0Value[2]);
   boost_current_10[currentIndex] = ui32ADC0Value[4];
 
-  for(i = 0; i<10;i++){
+  for (i = 0; i < 10; i++) {
     total += current_10[i];
     boost_total += boost_current_10[i];
   }
@@ -545,45 +584,57 @@ void ADC0IntHandler(void) {
 
   sensedCurrentFloat = getSensedCurrentFloat(sensedCurrent);
   sensedBatteryCurrentFloat = getSensedBatteryCurrentFloat(battery_current);
+}
 
-  // if(sensedBatteryCurrentFloat > 10) {
-  //   mode = 2;
-  // }
-
-  speedCommand = getSpeedCommand(throttle);
-
-  if (mode == 0 && pwmCurr >= 950U) {
-    mode = 1;
-  } else if(mode == 1 && pwmBoost <= 50U) {
-    mode = 0;
+void errorChecking() {
+  if (sensedBatteryCurrentFloat > 10) {
+    mode = 2;
   }
+}
 
-  // mode = 1;
-
+void control() {
+  speedCommand = getSpeedCommand(throttle);
 
   currentCommand = pidloop(speedCommand, sensedSpeed, false, p_i_i_pos,
                            p_i_i_neg, 0.0, cur_cmd_MAX, &s_int, &s_err);
-  // currentCommand = getCurrentCommand(throttle);
 
-  if(mode == 1) {
-    inverterDuty = 0.95;
-    // boostDuty = saturatef( getDutyCycleCommand(throttle) - 0.15,0.2,0.05);
-    boostDuty = pidloop(currentCommand, sensedCurrentFloat, !switch1,
-                         pi_b_pos, pi_b_neg, 0.05, 0.4, &b_int, &b_err);
-  } else if (mode == 0) {
-    inverterDuty = pidloop(currentCommand, sensedCurrentFloat, !switch1,
-                         p_i_d_pos, p_i_d_neg, 0.05, 0.95, &id_int, &id_err);
-    // inverterDuty = getDutyCycleCommand(throttle);
-    // inverterDuty = saturatef( getDutyCycleCommand(throttle),0.2,0.05);
-    boostDuty = 0.05;
-  } else {
-    inverterDuty = saturatef(inverterDuty*0.99 + 0.05,inverterDuty*0.99,0.05);
-    boostDuty = saturatef(boostDuty*0.99 + 0.05,boostDuty*0.99,0.05);
+  switch (mode) {
+    case 3:
+      inverterDuty =
+          pidloop(currentCommand, sensedCurrentFloat, !switch1, p_i_d_pos,
+                  p_i_d_neg, 0.05, 0.95, &id_int, &id_err);
+      boostDuty = 0.05;
+      break;
+    case 4:
+      inverterDuty = 0.95;
+      boostDuty = pidloop(currentCommand, sensedCurrentFloat, !switch1,
+                          pi_b_pos, pi_b_neg, 0.05, 0.4, &b_int, &b_err);
+      break;
+    default:
+      inverterDuty =
+          saturatef(inverterDuty * 0.99 + 0.05, inverterDuty * 0.99, 0.05);
+      boostDuty = saturatef(boostDuty * 0.99 + 0.05, boostDuty * 0.99, 0.05);
+      break;
   }
+}
 
+void updatePWMEnable() {
+  if (mode == 3 || mode == 4) {
+    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);  // PWM Enable
+  } else {
+    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, 0);  // PWM Disable
+  }
+}
 
-  
+void ADC0IntHandler(void) {
+  ADCIntClear(ADC0_BASE, 0);
+  ADCSequenceDataGet(ADC0_BASE, 0, ui32ADC0Value);
+  readSensors(ui32ADC0Value);
+  errorChecking();
+  control();
   updatePWM(inverterDuty, boostDuty);
+  updateStateMachine();
+  updatePWMEnable();
 }
 
 void GPIOIntHandler(void) {
@@ -596,14 +647,6 @@ void GPIOBIntHandler(void) {
   GPIOIntClear(GPIO_PORTB_BASE, GPIO_INT_PIN_3 | GPIO_INT_PIN_2);
   switch2 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_3) & GPIO_PIN_3;
   switch1 = GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_2) & GPIO_PIN_2;
-
-  if (switch1) {
-    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
-  } else {
-    GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, 0);
-    if (mode == 2) {  mode = 0; }
-  }
-
   updateGates();
 }
 
