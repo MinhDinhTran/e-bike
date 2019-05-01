@@ -25,6 +25,7 @@
 #define PI 3.14159
 #define TICK_PER_REV 138
 #define SPEED_SENSOR_DELAY 4000
+#define THROTTLE_DELAY 10
 
 #define RADIUS .3302
 
@@ -41,8 +42,8 @@
 #define k_is 0.45  // I gain speed
 #define k_ps 0.7   // P gain speed
 
-#define k_ib 2.0   // I gain boost
-#define k_pb 0.03  // P gain boost
+#define k_ib 1.0   // I gain boost
+#define k_pb 0.005  // P gain boost
 
 #ifdef DEBUG
 void __error__(char *pcFilename, uint32_t ui32Line) {}
@@ -105,6 +106,7 @@ volatile float sensedSpeed = 0;
 volatile float speedCommand = 0;
 
 volatile uint32_t speedSensorCount = 0;
+volatile uint32_t throttleDelayCount = 0;
 
 volatile float currentCommand = 0;
 volatile float inverterDuty = 0.05;
@@ -299,7 +301,7 @@ void updateStateMachine() {
     case 2:
       break;
     case 3:
-      if (pwmCurr >= 950U) {
+      if (pwmCurr >= 900U) {
         mode = 4;
       }
       break;
@@ -544,6 +546,16 @@ uint32_t getMax(uint32_t value1, uint32_t value2, uint32_t value3) {
   return temp;
 }
 
+void incramentThrottle(int newValue) {
+  if (throttleDelayCount++ > THROTTLE_DELAY) {
+    throttleDelayCount = 0;
+    if (newValue > throttle)
+      throttle++;
+    else if (newValue < throttle)
+      throttle--;
+  }
+}
+
 void readSensors(int ui32ADC0Value[]) {
   uint32_t total = 0;
   uint32_t boost_total = 0;
@@ -551,7 +563,7 @@ void readSensors(int ui32ADC0Value[]) {
 
   uint8_t i = 0;
 
-  throttle = ui32ADC0Value[3];
+  incramentThrottle(ui32ADC0Value[3]);
 
   battery_voltage = ui32ADC0Value[6];
   boost_voltage = ui32ADC0Value[5];
@@ -591,6 +603,8 @@ void errorChecking() {
 }
 
 void control() {
+  // inverterDuty = getDutyCycleCommand(throttle);
+
   speedCommand = getSpeedCommand(throttle);
 
   currentCommand = pidloop(speedCommand, sensedSpeed, false, p_i_i_pos,
@@ -600,17 +614,19 @@ void control() {
     case 3:
       inverterDuty =
           pidloop(currentCommand, sensedCurrentFloat, !switch1, p_i_d_pos,
-                  p_i_d_neg, 0.05, 0.95, &id_int, &id_err);
+                  p_i_d_neg, 0.05, 0.9, &id_int, &id_err);
       boostDuty = 0.05;
       break;
     case 4:
-      inverterDuty = 0.95;
+      inverterDuty = 0.9;
       boostDuty = pidloop(currentCommand, sensedCurrentFloat, !switch1,
-                          pi_b_pos, pi_b_neg, 0.05, 0.4, &b_int, &b_err);
+                          pi_b_pos, pi_b_neg, 0.05, 0.5, &b_int, &b_err);
+      // boostDuty = saturatef(getDutyCycleCommand(throttle)  - 0.4, .4, 0.05); 
       break;
     default:
       id_int = 0;
       b_int = 0;
+      s_int = 0;
 
       inverterDuty = saturatef(inverterDuty * 0.99, inverterDuty, 0.05);
       boostDuty = saturatef(boostDuty * 0.99, boostDuty, 0.05);
